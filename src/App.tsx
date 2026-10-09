@@ -1,261 +1,310 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
-  ArrowDownRight,
+  AlertTriangle,
   ArrowUpRight,
   Bell,
+  Cable,
   ChevronDown,
   CircleHelp,
-  Command,
-  CreditCard,
-  Download,
+  CloudSun,
+  Database,
+  Gauge,
+  Globe2,
   LayoutDashboard,
-  MoreHorizontal,
-  Package,
-  Plus,
-  Search,
-  Settings2,
-  ShoppingBag,
-  Users,
+  RadioTower,
+  Ship,
+  TrainFront,
+  Truck,
+  Waves,
+  Wind,
+  Zap,
 } from 'lucide-react'
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import type { LucideIcon } from 'lucide-react'
+import { siteConfig } from './config/siteConfig'
+import { summarizeStatuses } from './services/statusSummary'
+import type { ServiceStatus, StatusLevel } from './services/statusSummary'
 
-type Range = '7 days' | '30 days' | '90 days'
+type DashboardId =
+  | 'overview'
+  | 'weather'
+  | 'finance'
+  | 'roads'
+  | 'rail'
+  | 'aviation'
+  | 'maritime'
+  | 'power'
+  | 'energy'
+  | 'datacenters'
+  | 'telecom'
+  | 'networks'
 
-const chartData: Record<Range, { date: string; revenue: number; previous: number }[]> = {
-  '7 days': [
-    { date: 'Mon', revenue: 18, previous: 14 },
-    { date: 'Tue', revenue: 23, previous: 19 },
-    { date: 'Wed', revenue: 20, previous: 16 },
-    { date: 'Thu', revenue: 31, previous: 21 },
-    { date: 'Fri', revenue: 27, previous: 23 },
-    { date: 'Sat', revenue: 38, previous: 28 },
-    { date: 'Sun', revenue: 42, previous: 31 },
-  ],
-  '30 days': [
-    { date: 'Oct 1', revenue: 18, previous: 14 },
-    { date: 'Oct 5', revenue: 23, previous: 19 },
-    { date: 'Oct 9', revenue: 20, previous: 16 },
-    { date: 'Oct 13', revenue: 31, previous: 21 },
-    { date: 'Oct 17', revenue: 27, previous: 23 },
-    { date: 'Oct 21', revenue: 38, previous: 28 },
-    { date: 'Oct 25', revenue: 34, previous: 30 },
-    { date: 'Oct 31', revenue: 46, previous: 33 },
-  ],
-  '90 days': [
-    { date: 'Aug 4', revenue: 16, previous: 12 },
-    { date: 'Aug 15', revenue: 21, previous: 17 },
-    { date: 'Aug 26', revenue: 19, previous: 16 },
-    { date: 'Sep 6', revenue: 29, previous: 20 },
-    { date: 'Sep 17', revenue: 25, previous: 22 },
-    { date: 'Sep 28', revenue: 36, previous: 26 },
-    { date: 'Oct 9', revenue: 33, previous: 28 },
-    { date: 'Oct 20', revenue: 43, previous: 31 },
-    { date: 'Oct 31', revenue: 46, previous: 33 },
-  ],
+type InfrastructureService = ServiceStatus & {
+  id: Exclude<DashboardId, 'overview'>
+  label: string
+  description: string
+  metric: string
+  metricLabel: string
+  updated: string
+  category: string
 }
 
-const activities = [
-  { initials: 'JM', name: 'Jordan Morgan', detail: 'Pro plan · Annual', amount: '$240.00', time: '2 min ago', tone: 'mint' },
-  { initials: 'AL', name: 'Avery Lee', detail: 'Studio plan · Monthly', amount: '$48.00', time: '18 min ago', tone: 'peach' },
-  { initials: 'SK', name: 'Sam Kim', detail: 'Pro plan · Monthly', amount: '$24.00', time: '41 min ago', tone: 'blue' },
-  { initials: 'RP', name: 'Riley Patel', detail: 'Starter plan · Monthly', amount: '$12.00', time: '1 hr ago', tone: 'yellow' },
+type Incident = {
+  severity: Exclude<StatusLevel, 'operational' | 'unknown'>
+  service: string
+  title: string
+  location: string
+  time: string
+  note: string
+}
+
+type OverviewResponse = {
+  mode: 'demo'
+  services: InfrastructureService[]
+  incidents: Incident[]
+}
+
+const regions = [
+  { id: 'se', label: 'Sweden', detail: 'National view' },
+  { id: 'no', label: 'Norway', detail: 'National view' },
+  { id: 'dk', label: 'Denmark', detail: 'National view' },
+  { id: 'fi', label: 'Finland', detail: 'National view' },
+  { id: 'is', label: 'Iceland', detail: 'National view' },
+  { id: 'nordics', label: 'Nordics', detail: 'Regional view' },
+  { id: 'europe', label: 'Europe', detail: 'Regional view' },
 ]
 
-const navItems = [
-  { label: 'Overview', icon: LayoutDashboard },
-  { label: 'Sales', icon: CreditCard },
-  { label: 'Customers', icon: Users },
-  { label: 'Products', icon: Package },
+const dashboards: { id: DashboardId; label: string; icon: LucideIcon; group: string }[] = [
+  { id: 'overview', label: 'Situation overview', icon: LayoutDashboard, group: 'SITUATION' },
+  { id: 'weather', label: 'Weather', icon: CloudSun, group: 'CIVIL INFRASTRUCTURE' },
+  { id: 'finance', label: 'Financial markets', icon: Activity, group: 'CIVIL INFRASTRUCTURE' },
+  { id: 'roads', label: 'Road traffic', icon: Truck, group: 'TRANSPORT' },
+  { id: 'rail', label: 'Train traffic', icon: TrainFront, group: 'TRANSPORT' },
+  { id: 'aviation', label: 'Air traffic', icon: Wind, group: 'TRANSPORT' },
+  { id: 'maritime', label: 'Boat traffic', icon: Ship, group: 'TRANSPORT' },
+  { id: 'power', label: 'Electricity grid', icon: Zap, group: 'ENERGY' },
+  { id: 'energy', label: 'Oil & gas reserves', icon: Waves, group: 'ENERGY' },
+  { id: 'datacenters', label: 'Datacenters', icon: Database, group: 'DIGITAL INFRASTRUCTURE' },
+  { id: 'telecom', label: 'Telecom operators', icon: RadioTower, group: 'DIGITAL INFRASTRUCTURE' },
+  { id: 'networks', label: 'Data networks', icon: Cable, group: 'DIGITAL INFRASTRUCTURE' },
 ]
 
-const metrics = [
-  { label: 'Total revenue', value: '$48,294', change: '+12.8%', direction: 'up', icon: CreditCard, note: 'vs. last month' },
-  { label: 'Orders', value: '1,429', change: '+8.2%', direction: 'up', icon: ShoppingBag, note: 'vs. last month' },
-  { label: 'New customers', value: '384', change: '+4.6%', direction: 'up', icon: Users, note: 'vs. last month' },
-  { label: 'Refund rate', value: '1.24%', change: '-0.3%', direction: 'down', icon: Activity, note: 'vs. last month' },
-]
+const serviceIcons: Record<Exclude<DashboardId, 'overview'>, LucideIcon> = {
+  weather: CloudSun,
+  finance: Activity,
+  roads: Truck,
+  rail: TrainFront,
+  aviation: Wind,
+  maritime: Ship,
+  power: Zap,
+  energy: Waves,
+  datacenters: Database,
+  telecom: RadioTower,
+  networks: Cable,
+}
+
+const levelLabels: Record<StatusLevel, string> = {
+  operational: 'Operational',
+  elevated: 'Elevated',
+  critical: 'Critical',
+  unknown: 'No data',
+}
 
 function App() {
-  const [range, setRange] = useState<Range>('30 days')
-  const [activePage, setActivePage] = useState('Overview')
+  const [activeDashboard, setActiveDashboard] = useState<DashboardId>('overview')
+  const [activeRegion, setActiveRegion] = useState('se')
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [services, setServices] = useState<InfrastructureService[]>([])
+  const [incidents, setIncidents] = useState<Incident[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [dataError, setDataError] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setIsLoading(true)
+    setDataError(null)
+    setServices([])
+    setIncidents([])
 
-  function downloadReport() {
-    const rows = [
-      ['Metric', 'Value', 'Change'],
-      ['Total revenue', '$48,294', '+12.8%'],
-      ['Orders', '1,429', '+8.2%'],
-      ['New customers', '384', '+4.6%'],
-      ['Refund rate', '1.24%', '-0.3%'],
-    ]
-    const csv = rows.map((row) => row.join(',')).join('\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'northstar-monthly-report.csv'
-    link.click()
-    URL.revokeObjectURL(url)
+    fetch(`/api/v1/overview?region=${encodeURIComponent(activeRegion)}`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`API returned ${response.status}`)
+        return response.json() as Promise<OverviewResponse>
+      })
+      .then((overview) => {
+        if (cancelled) return
+        setServices(overview.services)
+        setIncidents(overview.incidents)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setDataError(error instanceof Error ? error.message : 'Unable to load situation data.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeRegion])
+  const selectedRegion = regions.find((region) => region.id === activeRegion) ?? regions[0]
+  const visibleServices = activeDashboard === 'overview'
+    ? services
+    : services.filter((service) => service.id === activeDashboard)
+  const summary = useMemo(() => summarizeStatuses(services, siteConfig.statusSummary), [services])
+  const currentDashboard = dashboards.find((dashboard) => dashboard.id === activeDashboard) ?? dashboards[0]
+  const statusCounts = services.reduce(
+    (counts, service) => ({ ...counts, [service.status]: counts[service.status] + 1 }),
+    { operational: 0, elevated: 0, critical: 0, unknown: 0 },
+  )
+
+  function selectDashboard(id: DashboardId) {
+    setActiveDashboard(id)
   }
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#overview" aria-label="Northstar home">
-          <span className="brand-mark"><Command size={17} strokeWidth={2.5} /></span>
-          <span>northstar<span className="brand-period">.</span></span>
+        <a className="brand" href="#overview" onClick={() => selectDashboard('overview')}>
+          <span className="brand-mark"><Globe2 size={19} strokeWidth={2} /></span>
+          <span>Northwatch<span className="brand-period">.</span></span>
         </a>
+        <p className="brand-subtitle">INFRASTRUCTURE MONITOR</p>
 
-        <div className="workspace-switcher">
-          <div className="workspace-avatar">S</div>
-          <span className="workspace-copy"><strong>Studio North</strong><small>Free workspace</small></span>
+        <label className="region-label" htmlFor="region-select">AREA OF INTEREST</label>
+        <div className="region-picker">
+          <span className="region-flag"><Globe2 size={15} /></span>
+          <select id="region-select" value={activeRegion} onChange={(event) => setActiveRegion(event.target.value)}>
+            {regions.map((region) => <option key={region.id} value={region.id}>{region.label}</option>)}
+          </select>
           <ChevronDown size={15} />
         </div>
+        <div className="region-detail">{selectedRegion.detail} <span>·</span> Europe/CET</div>
 
-        <div className="nav-label">WORKSPACE</div>
-        <nav className="primary-nav" aria-label="Main navigation">
-          {navItems.map(({ label, icon: Icon }) => (
-            <button
-              className={`nav-item ${activePage === label ? 'active' : ''}`}
-              key={label}
-              onClick={() => setActivePage(label)}
-              type="button"
-            >
-              <Icon size={17} strokeWidth={1.8} />
-              <span>{label}</span>
-              {label === 'Sales' && <span className="nav-count">4</span>}
-            </button>
-          ))}
+        <nav className="dashboard-nav" aria-label="Infrastructure dashboards">
+          {dashboards.map(({ id, label, icon: Icon, group }, index) => {
+            const previousGroup = dashboards[index - 1]?.group
+            return (
+              <div key={id}>
+                {group !== previousGroup && <div className="nav-label">{group}</div>}
+                <button
+                  aria-current={activeDashboard === id ? 'page' : undefined}
+                  className={`nav-item ${activeDashboard === id ? 'active' : ''}`}
+                  onClick={() => selectDashboard(id)}
+                  type="button"
+                >
+                  <Icon size={16} strokeWidth={1.8} />
+                  <span>{label}</span>
+                  {id !== 'overview' && services.find((service) => service.id === id)?.status === 'critical' && <span className="nav-alert" />}
+                </button>
+              </div>
+            )
+          })}
         </nav>
 
         <div className="sidebar-bottom">
-          <button className="nav-item" type="button" onClick={() => setActivePage('Settings')}>
-            <Settings2 size={17} strokeWidth={1.8} /><span>Settings</span>
-          </button>
-          <button className="nav-item" type="button" onClick={() => setActivePage('Help center')}>
-            <CircleHelp size={17} strokeWidth={1.8} /><span>Help center</span>
-          </button>
-          <div className="profile">
-            <div className="profile-photo">AM</div>
-            <span className="workspace-copy"><strong>Alex Morgan</strong><small>Owner</small></span>
-            <MoreHorizontal size={18} />
-          </div>
+          <div className="connection-state"><span className="connection-dot" /><span><strong>Demo data</strong><small>No live sources connected</small></span></div>
+          <a className="help-link" href="#data-provenance"><CircleHelp size={16} />Data & methodology</a>
         </div>
       </aside>
 
       <main className="main-content" id="overview">
         <header className="topbar">
-          <div className="breadcrumb"><span>Workspace</span><span className="breadcrumb-divider">/</span><strong>{activePage}</strong></div>
+          <div className="breadcrumb"><span>Situation room</span><span className="breadcrumb-divider">/</span><strong>{currentDashboard.label}</strong></div>
           <div className="topbar-actions">
-            <button className="icon-button search-button" type="button" aria-label="Search"><Search size={17} /></button>
-            <button className="icon-button notification-button" type="button" aria-label="Notifications"><Bell size={17} /><span /></button>
-            <div className="topbar-divider" />
-            <button className="date-button" type="button"><span className="date-dot" />Oct 1 — Oct 31, 2026<ChevronDown size={14} /></button>
+            <span className="demo-indicator"><span /> SIMULATED DATA</span>
+            <button className="icon-button notification-button" type="button" aria-label="Notifications" aria-expanded={showNotifications} onClick={() => setShowNotifications(!showNotifications)}><Bell size={17} /><span /></button>
+            <span className="topbar-divider" />
+            <time className="updated-at" dateTime="2026-10-09T18:47:00+02:00">09 Oct 2026 <span>18:47 CET</span></time>
+            {showNotifications && <div className="notification-popover" role="status"><strong>3 active signals</strong><span>1 critical · 2 elevated</span></div>}
           </div>
         </header>
 
         <div className="dashboard-content">
           <section className="page-heading">
             <div>
-              <div className="eyebrow"><span className="eyebrow-line" /> THURSDAY, OCTOBER 9, 2026</div>
-              <h1>Good morning, Alex<span className="heading-comma">.</span></h1>
-              <p>Here’s what’s happening with your store today.</p>
+              <div className="eyebrow"><span className="eyebrow-line" /> NORDIC INFRASTRUCTURE PICTURE</div>
+              <h1>{activeDashboard === 'overview' ? 'Situation overview' : currentDashboard.label}<span className="heading-period">.</span></h1>
+              <p>Coordinated view of essential services across {selectedRegion.label}.</p>
             </div>
-            <button className="primary-button" onClick={downloadReport} type="button"><Download size={16} />Export report</button>
+            <div className="last-updated"><span className="live-dot" /> Demo snapshot <span>·</span> 18:47 CET</div>
           </section>
 
-          <section className="metrics-grid" aria-label="Key performance indicators">
-            {metrics.map(({ label, value, change, direction, icon: Icon, note }, index) => (
-              <article className={`metric-card metric-card-${index + 1}`} key={label}>
-                <div className="metric-top"><span>{label}</span><span className="metric-icon"><Icon size={16} strokeWidth={1.8} /></span></div>
-                <div className="metric-value">{value}</div>
-                <div className="metric-foot">
-                  <span className={`change-pill ${direction}`}>
-                    {direction === 'up' ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{change}
-                  </span>
-                  <span className="metric-note">{note}</span>
-                </div>
-              </article>
-            ))}
+          <section className={`situation-banner ${summary.level}`} aria-label="Overall situation summary">
+            <div className="banner-symbol">
+              {summary.level === 'critical' ? <AlertTriangle size={21} /> : <Gauge size={21} />}
+            </div>
+            <div className="banner-copy">
+              <span className="banner-overline">CONFIGURABLE SITUATION SUMMARY</span>
+              <strong>{summary.label}</strong>
+              <span>{summary.description}</span>
+            </div>
+            <div className="banner-stats">
+              <div><strong>{statusCounts.critical}</strong><span>Critical</span></div>
+              <div><strong>{statusCounts.elevated}</strong><span>Elevated</span></div>
+              <div><strong>{statusCounts.operational}</strong><span>Operational</span></div>
+              <div><strong>{statusCounts.unknown}</strong><span>No data</span></div>
+            </div>
+            <span className="summary-config">{siteConfig.statusSummary.method}</span>
+          </section>
+          {dataError && <div className="data-error" role="alert">Situation data is unavailable: {dataError}</div>}
+
+          <section className="section-heading">
+            <div><div className="section-kicker">SERVICE HEALTH</div><h2>{activeDashboard === 'overview' ? 'Critical infrastructure' : `${currentDashboard.label} status`}</h2></div>
+            <span className="scope-label"><Globe2 size={14} /> {selectedRegion.label}</span>
           </section>
 
-          <section className="chart-panel" aria-labelledby="revenue-heading">
-            <div className="panel-heading chart-heading">
-              <div>
-                <div className="section-kicker">THE BIG PICTURE</div>
-                <div className="title-line"><h2 id="revenue-heading">Revenue over time</h2><span className="live-dot" /></div>
+          <section className="service-grid" aria-label="Infrastructure service health">
+            {isLoading && <p className="data-message" role="status">Loading situation data…</p>}
+            {!isLoading && !dataError && visibleServices.length === 0 && <p className="data-message">No service data is available for this dashboard.</p>}
+            {visibleServices.map((service) => {
+              const Icon = serviceIcons[service.id]
+              return (
+                <article className={`service-card ${service.status}`} key={service.id}>
+                  <div className="service-card-heading">
+                    <span className="service-icon"><Icon size={18} strokeWidth={1.8} /></span>
+                    <span className={`status-badge ${service.status}`}><span />{levelLabels[service.status]}</span>
+                  </div>
+                  <h3>{service.label}</h3>
+                  <p className="service-description">{service.description}</p>
+                  <div className="service-metric">{service.metric}</div>
+                  <div className="service-metric-label">{service.metricLabel}</div>
+                  <div className="service-card-footer"><span>{service.category}</span><span>{service.updated}</span></div>
+                </article>
+              )
+            })}
+          </section>
+
+          <section className="lower-grid">
+            <article className="panel incident-panel">
+              <div className="panel-heading">
+                <div><div className="section-kicker">NEEDS ATTENTION</div><h2>Active incidents & advisories</h2></div>
+                <span className="incident-count">{incidents.length} active</span>
               </div>
-              <div className="chart-controls">
-                <div className="chart-legend"><span className="legend-current" />Revenue<span className="legend-previous" />Previous period</div>
-                <div className="range-switch" role="group" aria-label="Chart time range">
-                  {(['7 days', '30 days', '90 days'] as const).map((option) => (
-                    <button className={range === option ? 'selected' : ''} key={option} onClick={() => setRange(option)} type="button">{option.replace(' ', '')}</button>
-                  ))}
-                </div>
+              <div className="incident-list">
+                {incidents.map((incident) => (
+                  <div className="incident-row" key={incident.title}>
+                    <span className={`incident-severity ${incident.severity}`}><AlertTriangle size={15} /></span>
+                    <div className="incident-main"><div><span className={`incident-tag ${incident.severity}`}>{levelLabels[incident.severity]}</span><span className="incident-service">{incident.service}</span></div><strong>{incident.title}</strong><span className="incident-note">{incident.note}</span></div>
+                    <div className="incident-location">{incident.location}<span>{incident.time} CET</span></div>
+                  </div>
+                ))}
+                {incidents.length === 0 && <p className="data-message">No incident feeds are connected for this area.</p>}
               </div>
-            </div>
-            <div className="chart-summary"><strong>$48,294</strong><span className="summary-change"><ArrowUpRight size={14} />12.8%</span><span className="metric-note">compared to previous period</span></div>
-            <div className="chart-wrap">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData[range]} margin={{ top: 10, right: 6, left: -18, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#387c65" stopOpacity={0.18} />
-                      <stop offset="95%" stopColor="#387c65" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} stroke="#e9ebe6" strokeDasharray="3 5" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#999e98', fontSize: 11 }} tickMargin={12} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#999e98', fontSize: 11 }} tickFormatter={(value: number) => `$${value}k`} tickCount={5} />
-                  <Tooltip
-                    contentStyle={{ border: '1px solid #e6e9e3', borderRadius: 8, boxShadow: '0 8px 24px #18251d12', fontSize: 12 }}
-                    formatter={(value, name) => [`$${value}k`, name === 'revenue' ? 'Revenue' : 'Previous period']}
-                    labelStyle={{ color: '#252c28', fontWeight: 600, marginBottom: 4 }}
-                  />
-                  <Area type="monotone" dataKey="previous" stroke="#c6cbc4" strokeWidth={1.5} strokeDasharray="4 5" fill="transparent" activeDot={false} />
-                  <Area type="monotone" dataKey="revenue" stroke="#387c65" strokeWidth={2.5} fill="url(#revenueFill)" activeDot={{ r: 4, fill: '#387c65', stroke: '#fff', strokeWidth: 2 }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            </article>
+
+            <article className="panel source-panel" id="data-provenance">
+              <div className="section-kicker">DATA PROVENANCE</div>
+              <h2>Source connectivity</h2>
+              <p>Connect trusted national and European feeds through the backend integration layer.</p>
+              <div className="source-meter"><div><span>Connected sources</span><strong>0 <small>/ 11 domains</small></strong></div><span className="meter-track"><i /></span></div>
+              <a className="source-link" href="/api/v1/overview?region=se" rel="noreferrer" target="_blank">Inspect demo API response <ArrowUpRight size={14} /></a>
+            </article>
           </section>
 
-          <section className="activity-panel" aria-labelledby="activity-heading">
-            <div className="panel-heading activity-heading">
-              <div>
-                <div className="section-kicker">FRESH OFF THE PRESS</div>
-                <h2 id="activity-heading">Recent activity</h2>
-              </div>
-              <button className="text-button" type="button" onClick={() => setActivePage('Sales')}>View all <ArrowUpRight size={14} /></button>
-            </div>
-            <div className="activity-table-wrap">
-              <table className="activity-table">
-                <thead><tr><th>CUSTOMER</th><th>PLAN</th><th>AMOUNT</th><th>WHEN</th></tr></thead>
-                <tbody>
-                  {activities.map((item) => (
-                    <tr key={item.name}>
-                      <td><div className="customer-cell"><span className={`customer-avatar ${item.tone}`}>{item.initials}</span><strong>{item.name}</strong></div></td>
-                      <td className="plan-cell">{item.detail}</td>
-                      <td className="amount-cell">{item.amount}</td>
-                      <td className="time-cell">{item.time}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <button className="mobile-activity-link" type="button" onClick={() => setActivePage('Sales')}>All transactions <ArrowUpRight size={14} /></button>
-          </section>
-
-          <footer className="page-footer"><span>Made for the long view.</span><span>Northstar Analytics <span className="footer-separator">·</span> Updated just now</span></footer>
+          <footer className="page-footer"><span>Situational awareness · not an operational control system</span><span>Source data must be verified before operational use.</span></footer>
         </div>
       </main>
-      <button className="quick-add" aria-label="Create report" onClick={downloadReport} type="button"><Plus size={20} /></button>
     </div>
   )
 }
