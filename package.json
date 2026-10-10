@@ -4,25 +4,31 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:api\"",
+    "dev": "tsx server.ts",
     "dev:web": "vite",
     "dev:api": "node --env-file-if-exists=.env --watch server/index.mjs",
     "build": "tsc -b && vite build",
+    "start": "tsx server.ts",
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty",
+    "lint": "tsc -b --pretty",
     "test": "vitest run"
   },
   "dependencies": {
+    "express": "^5.3.0",
     "lucide-react": "^0.468.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "recharts": "^2.15.4"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.5",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
     "concurrently": "^9.2.1",
+    "tsx": "^4.23.15",
     "typescript": "~5.9.3",
     "vite": "^7.1.7",
     "vitest": "^3.2.4"

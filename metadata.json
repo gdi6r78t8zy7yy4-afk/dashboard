@@ -1,0 +1,7 @@
+{
+  "name": "Northwatch",
+  "description": "Situational awareness for critical infrastructure in Sweden, the Nordics, and Europe.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
