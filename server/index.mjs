@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { getOverviewForRegion } from './demoData.mjs'
+import { getOverviewForRegion, getSectorForRegion } from './demoData.mjs'
 
 const port = Number(process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '127.0.0.1'
@@ -25,6 +25,14 @@ const server = createServer((request, response) => {
     response.writeHead(200)
     const region = url.searchParams.get('region') ?? 'se'
     response.end(JSON.stringify(getOverviewForRegion(region)))
+    return
+  }
+
+  if (url.pathname === '/api/v1/sector') {
+    response.writeHead(200)
+    const region = url.searchParams.get('region') ?? 'se'
+    const id = url.searchParams.get('id') ?? 'telecom'
+    response.end(JSON.stringify(getSectorForRegion(region, id)))
     return
   }
 

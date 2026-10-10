@@ -8,6 +8,8 @@ describe('demo overview by region', () => {
     expect(overview.mode).toBe('demo')
     expect(overview.services).toHaveLength(11)
     expect(overview.incidents).toHaveLength(3)
+    expect(overview.sources.some((source) => source.id === 'cert-se')).toBe(true)
+    expect(overview.timeline.length).toBeGreaterThan(0)
   })
 
   it('marks areas without connected feeds as unknown', () => {
@@ -17,5 +19,6 @@ describe('demo overview by region', () => {
     expect(overview.services.every((service) => service.status === 'unknown')).toBe(true)
     expect(overview.services.every((service) => service.metric === 'No live feed')).toBe(true)
     expect(overview.incidents).toEqual([])
+    expect(overview.sources.some((source) => source.status === 'not_configured')).toBe(true)
   })
 })

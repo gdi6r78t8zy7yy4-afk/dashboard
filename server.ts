@@ -1,7 +1,7 @@
 import express, { type Request, type Response } from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { getOverviewForRegion } from './server/demoData.mjs'
+import { getOverviewForRegion, getSectorForRegion } from './server/demoData.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -18,6 +18,12 @@ async function startServer() {
   app.get('/api/v1/overview', (req: Request, res: Response) => {
     const region = typeof req.query.region === 'string' ? req.query.region : 'se'
     res.json(getOverviewForRegion(region))
+  })
+
+  app.get('/api/v1/sector', (req: Request, res: Response) => {
+    const region = typeof req.query.region === 'string' ? req.query.region : 'se'
+    const id = typeof req.query.id === 'string' ? req.query.id : 'telecom'
+    res.json(getSectorForRegion(region, id))
   })
 
   if (!isProduction) {

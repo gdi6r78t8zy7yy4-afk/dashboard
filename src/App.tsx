@@ -58,10 +58,85 @@ type Incident = {
   note: string
 }
 
+type SourceStatus = {
+  id: string
+  label: string
+  category: string
+  status: 'ok' | 'warning' | 'error' | 'stale' | 'not_configured'
+  lastSuccessfulUpdate: string
+  updateInterval: string
+  timeout: string
+  lastError: string | null
+  requiresAuth: boolean
+  verified: boolean
+}
+
+type OverviewSector = {
+  id: string
+  label: string
+  status: StatusLevel
+  summary: string
+  value: string
+  region: string
+}
+
+type MapRegion = {
+  id: string
+  label: string
+  status: StatusLevel
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+type TimelineItem = {
+  id: string
+  title: string
+  time: string
+  source: string
+  severity: Exclude<StatusLevel, 'unknown'>
+  category: string
+}
+
 type OverviewResponse = {
   mode: 'demo'
   services: InfrastructureService[]
   incidents: Incident[]
+  sectors: OverviewSector[]
+  mapRegions: MapRegion[]
+  timeline: TimelineItem[]
+  sources: SourceStatus[]
+}
+
+type SectorObservation = {
+  id: string
+  title: string
+  summary: string
+  kind: 'verified_incident' | 'warning' | 'technical_observation' | 'risk_indicator'
+  quality: 'verified' | 'provisional' | 'stale' | 'missing'
+  source: string
+  location: string
+  timestamp: string
+  severity: 'critical' | 'elevated'
+}
+
+type SectorKpi = {
+  label: string
+  value: string
+  trend: string
+  status: StatusLevel
+}
+
+type SectorDashboardResponse = {
+  mode: 'demo'
+  id: string
+  label: string
+  headline: string
+  status: StatusLevel
+  qualityNote: string
+  kpis: SectorKpi[]
+  observations: SectorObservation[]
 }
 
 const regions = [
@@ -110,20 +185,39 @@ const levelLabels: Record<StatusLevel, string> = {
   unknown: 'No data',
 }
 
+const observationKindLabels: Record<SectorObservation['kind'], string> = {
+  verified_incident: 'Verified incident',
+  warning: 'Warning',
+  technical_observation: 'Technical observation',
+  risk_indicator: 'Risk indicator',
+}
+
+const observationQualityLabels: Record<SectorObservation['quality'], string> = {
+  verified: 'Verified',
+  provisional: 'Provisional',
+  stale: 'Stale',
+  missing: 'Missing',
+}
+
 function App() {
   const [activeDashboard, setActiveDashboard] = useState<DashboardId>('overview')
   const [activeRegion, setActiveRegion] = useState('se')
   const [showNotifications, setShowNotifications] = useState(false)
   const [services, setServices] = useState<InfrastructureService[]>([])
   const [incidents, setIncidents] = useState<Incident[]>([])
+  const [overviewData, setOverviewData] = useState<OverviewResponse | null>(null)
+  const [sectorData, setSectorData] = useState<SectorDashboardResponse | null>(null)
+  const [selectedObservation, setSelectedObservation] = useState<SectorObservation | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [dataError, setDataError] = useState<string | null>(null)
+
   useEffect(() => {
     let cancelled = false
     setIsLoading(true)
     setDataError(null)
     setServices([])
     setIncidents([])
+    setSectorData(null)
 
     fetch(`/api/v1/overview?region=${encodeURIComponent(activeRegion)}`)
       .then((response) => {
@@ -134,6 +228,7 @@ function App() {
         if (cancelled) return
         setServices(overview.services)
         setIncidents(overview.incidents)
+        setOverviewData(overview)
       })
       .catch((error: unknown) => {
         if (cancelled) return
@@ -147,6 +242,40 @@ function App() {
       cancelled = true
     }
   }, [activeRegion])
+
+  useEffect(() => {
+    if (activeDashboard === 'overview') {
+      setSectorData(null)
+      setSelectedObservation(null)
+      return
+    }
+
+    let cancelled = false
+    setIsLoading(true)
+    setDataError(null)
+
+    fetch(`/api/v1/sector?region=${encodeURIComponent(activeRegion)}&id=${encodeURIComponent(activeDashboard)}`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Sector API returned ${response.status}`)
+        return response.json() as Promise<SectorDashboardResponse>
+      })
+      .then((response) => {
+        if (cancelled) return
+        setSectorData(response)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setDataError(error instanceof Error ? error.message : 'Unable to load sector data.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeDashboard, activeRegion])
+
   const selectedRegion = regions.find((region) => region.id === activeRegion) ?? regions[0]
   const visibleServices = activeDashboard === 'overview'
     ? services
@@ -157,6 +286,14 @@ function App() {
     (counts, service) => ({ ...counts, [service.status]: counts[service.status] + 1 }),
     { operational: 0, elevated: 0, critical: 0, unknown: 0 },
   )
+  const sectorStatus = sectorData?.status ?? 'unknown'
+  const sortedIncidents = useMemo(() => [...incidents].sort((left, right) => {
+    const severityRank = { critical: 3, elevated: 2 }
+    const leftRank = severityRank[left.severity] ?? 1
+    const rightRank = severityRank[right.severity] ?? 1
+    if (leftRank !== rightRank) return rightRank - leftRank
+    return new Date(right.time).getTime() - new Date(left.time).getTime()
+  }), [incidents])
 
   function selectDashboard(id: DashboardId) {
     setActiveDashboard(id)
@@ -275,21 +412,186 @@ function App() {
             })}
           </section>
 
+          {activeDashboard !== 'overview' && sectorData && (
+            <section className="sector-panel" aria-live="polite">
+              <div className="sector-panel-header">
+                <div>
+                  <div className="section-kicker">SECTOR VIEW</div>
+                  <h2>{sectorData.label}</h2>
+                </div>
+                <span className={`status-badge ${sectorStatus}`}><span />{levelLabels[sectorStatus]}</span>
+              </div>
+
+              <p className="sector-headline">{sectorData.headline}</p>
+
+              <div className="sector-kpi-grid">
+                {sectorData.kpis.map((kpi) => (
+                  <div className="sector-kpi" key={kpi.label}>
+                    <div className="sector-kpi-topline">
+                      <span>{kpi.label}</span>
+                      <span className={`status-badge ${kpi.status}`}><span />{levelLabels[kpi.status]}</span>
+                    </div>
+                    <strong>{kpi.value}</strong>
+                    <small>{kpi.trend}</small>
+                  </div>
+                ))}
+              </div>
+
+              <div className="sector-detail-grid">
+                <article className="panel observation-panel">
+                  <div className="panel-heading">
+                    <div><div className="section-kicker">OBSERVATIONS</div><h2>Operational signal stream</h2></div>
+                    <span className="incident-count">{sectorData.observations.length} items</span>
+                  </div>
+                  <div className="observation-list">
+                    {sectorData.observations.map((observation) => (
+                      <button
+                        key={observation.id}
+                        className="observation-row"
+                        type="button"
+                        onClick={() => setSelectedObservation(observation)}
+                      >
+                        <span className={`incident-severity ${observation.severity}`}><AlertTriangle size={14} /></span>
+                        <span className="observation-copy">
+                          <span className="observation-meta">
+                            <span className={`incident-tag ${observation.severity}`}>{observationKindLabels[observation.kind]}</span>
+                            <span className="incident-service">{observation.source}</span>
+                          </span>
+                          <strong>{observation.title}</strong>
+                          <small>{observation.summary}</small>
+                        </span>
+                        <span className="observation-side">
+                          <span className="quality-pill">{observationQualityLabels[observation.quality]}</span>
+                          <span>{observation.timestamp}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="panel source-panel" id="data-provenance">
+                  <div className="section-kicker">SOURCE QUALITY</div>
+                  <h2>Connected data sources</h2>
+                  <p>{sectorData.qualityNote}</p>
+                  <ul className="source-list">
+                    <li><span>Primary feed</span><strong>Official API / RSS</strong></li>
+                    <li><span>Update cadence</span><strong>Every 5–15 minutes</strong></li>
+                    <li><span>Validation</span><strong>Demo mode; verification required</strong></li>
+                    <li><span>Problem handling</span><strong>Stale and missing values are flagged</strong></li>
+                  </ul>
+                  <a className="source-link" href="/api/v1/overview?region=se" rel="noreferrer" target="_blank">Inspect demo API response <ArrowUpRight size={14} /></a>
+                </article>
+              </div>
+            </section>
+          )}
+
+          {activeDashboard === 'overview' && overviewData && (
+            <>
+              <section className="overview-aggregate-grid" aria-label="Cross-sector infrastructure overview">
+                <article className="panel map-panel">
+                  <div className="panel-heading">
+                    <div><div className="section-kicker">GEOGRAPHY</div><h2>Nordic and European view</h2></div>
+                    <span className="incident-count">{overviewData.mapRegions.length} regions</span>
+                  </div>
+                  <svg viewBox="0 0 420 260" className="map-svg" aria-label="Map of Nordic region and Europe">
+                    <rect x="0" y="0" width="420" height="260" fill="#f5f7f3" rx="12" />
+                    <path d="M70 80 L120 50 L192 58 L235 85 L208 125 L175 145 L120 138 L78 110 Z" fill="#edf2ed" stroke="#d5ddd5" strokeWidth="1.5" />
+                    <path d="M205 52 L258 69 L295 102 L276 142 L224 152 L196 120 Z" fill="#edf2ed" stroke="#d5ddd5" strokeWidth="1.5" />
+                    <path d="M155 150 L185 175 L210 195 L188 228 L146 221 L130 186 Z" fill="#edf2ed" stroke="#d5ddd5" strokeWidth="1.5" />
+                    <path d="M300 165 L332 173 L352 186 L343 203 L314 208 L301 192 Z" fill="#edf2ed" stroke="#d5ddd5" strokeWidth="1.5" />
+                    {overviewData.mapRegions.map((region) => (
+                      <g key={region.id}>
+                        <rect
+                          x={region.x}
+                          y={region.y}
+                          width={region.width}
+                          height={region.height}
+                          rx="8"
+                          fill={region.status === 'critical' ? '#f3e4df' : region.status === 'elevated' ? '#f7ead7' : region.status === 'unknown' ? '#f0f2ef' : '#ebf0eb'}
+                          stroke={region.status === 'critical' ? '#c36d60' : region.status === 'elevated' ? '#cc9340' : '#c9d1ca'}
+                          strokeWidth="1.5"
+                        />
+                        <text x={region.x + region.width / 2} y={region.y + region.height / 2 + 4} textAnchor="middle" fontSize="10" fill="#45514a" fontWeight="700">{region.label}</text>
+                      </g>
+                    ))}
+                  </svg>
+                </article>
+
+                <article className="panel sector-summary-panel">
+                  <div className="section-kicker">SECTOR STATUS</div>
+                  <h2>Cross-sector overview</h2>
+                  <div className="sector-summary-list">
+                    {overviewData.sectors.map((sector) => (
+                      <div className="sector-summary-row" key={sector.id}>
+                        <div>
+                          <strong>{sector.label}</strong>
+                          <small>{sector.summary}</small>
+                        </div>
+                        <span className={`status-badge ${sector.status}`}><span />{sector.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </section>
+
+              <section className="timeline-source-grid">
+                <article className="panel timeline-panel">
+                  <div className="panel-heading">
+                    <div><div className="section-kicker">TIMELINE</div><h2>Event history</h2></div>
+                    <span className="incident-count">{overviewData.timeline.length} events</span>
+                  </div>
+                  <div className="timeline-list">
+                    {overviewData.timeline.map((event) => (
+                      <div key={event.id} className="timeline-item">
+                        <span className={`incident-severity ${event.severity}`}><AlertTriangle size={13} /></span>
+                        <div>
+                          <strong>{event.title}</strong>
+                          <small>{event.source} · {event.category}</small>
+                        </div>
+                        <time>{event.time}</time>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="panel source-panel" id="data-provenance">
+                  <div className="section-kicker">SOURCE STATUS</div>
+                  <h2>Source health and freshness</h2>
+                  <div className="source-status-list">
+                    {overviewData.sources.map((source) => (
+                      <div key={source.id} className="source-status-row">
+                        <div>
+                          <strong>{source.label}</strong>
+                          <small>{source.category}</small>
+                        </div>
+                        <div className="source-status-meta">
+                          <span className={`status-badge ${source.status === 'ok' ? 'operational' : source.status === 'not_configured' ? 'unknown' : source.status === 'stale' ? 'elevated' : 'critical'}`}><span />{source.status === 'ok' ? 'OK' : source.status === 'not_configured' ? 'Not configured' : source.status === 'stale' ? 'Stale' : source.status === 'warning' ? 'Warning' : 'Error'}</span>
+                          <small>{source.lastSuccessfulUpdate}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <a className="source-link" href="/api/v1/overview?region=se" rel="noreferrer" target="_blank">Inspect demo API response <ArrowUpRight size={14} /></a>
+                </article>
+              </section>
+            </>
+          )}
+
           <section className="lower-grid">
             <article className="panel incident-panel">
               <div className="panel-heading">
                 <div><div className="section-kicker">NEEDS ATTENTION</div><h2>Active incidents & advisories</h2></div>
-                <span className="incident-count">{incidents.length} active</span>
+                <span className="incident-count">{sortedIncidents.length} active</span>
               </div>
               <div className="incident-list">
-                {incidents.map((incident) => (
-                  <div className="incident-row" key={incident.title}>
+                {sortedIncidents.map((incident) => (
+                  <div className="incident-row" key={`${incident.title}-${incident.time}`}>
                     <span className={`incident-severity ${incident.severity}`}><AlertTriangle size={15} /></span>
                     <div className="incident-main"><div><span className={`incident-tag ${incident.severity}`}>{levelLabels[incident.severity]}</span><span className="incident-service">{incident.service}</span></div><strong>{incident.title}</strong><span className="incident-note">{incident.note}</span></div>
-                    <div className="incident-location">{incident.location}<span>{incident.time} CET</span></div>
+                    <div className="incident-location">{incident.location}<span>{new Date(incident.time).toLocaleString('sv-SE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}</span></div>
                   </div>
                 ))}
-                {incidents.length === 0 && <p className="data-message">No incident feeds are connected for this area.</p>}
+                {sortedIncidents.length === 0 && <p className="data-message">No incident feeds are connected for this area.</p>}
               </div>
             </article>
 
@@ -297,10 +599,37 @@ function App() {
               <div className="section-kicker">DATA PROVENANCE</div>
               <h2>Source connectivity</h2>
               <p>Connect trusted national and European feeds through the backend integration layer.</p>
-              <div className="source-meter"><div><span>Connected sources</span><strong>0 <small>/ 11 domains</small></strong></div><span className="meter-track"><i /></span></div>
+              <div className="source-meter"><div><span>Connected sources</span><strong>{overviewData?.sources.filter((source) => source.status === 'ok').length ?? 0} <small>/ {overviewData?.sources.length ?? 0} domains</small></strong></div><span className="meter-track"><i style={{ width: `${Math.max(10, ((overviewData?.sources.filter((source) => source.status === 'ok').length ?? 0) / (overviewData?.sources.length || 1)) * 100)}%` }} /></span></div>
               <a className="source-link" href="/api/v1/overview?region=se" rel="noreferrer" target="_blank">Inspect demo API response <ArrowUpRight size={14} /></a>
             </article>
           </section>
+
+          {selectedObservation && (
+            <div className="detail-sheet" role="dialog" aria-modal="true" aria-label={selectedObservation.title}>
+              <div className="detail-sheet-card">
+                <div className="panel-heading detail-header">
+                  <div>
+                    <div className="section-kicker">DETAIL VIEW</div>
+                    <h2>{selectedObservation.title}</h2>
+                  </div>
+                  <button type="button" className="icon-button" onClick={() => setSelectedObservation(null)} aria-label="Close detail view">×</button>
+                </div>
+
+                <div className="detail-body">
+                  <div className="detail-badges">
+                    <span className={`incident-tag ${selectedObservation.severity}`}>{observationKindLabels[selectedObservation.kind]}</span>
+                    <span className="quality-pill">{observationQualityLabels[selectedObservation.quality]}</span>
+                  </div>
+                  <p>{selectedObservation.summary}</p>
+                  <dl className="detail-meta">
+                    <div><dt>Source</dt><dd>{selectedObservation.source}</dd></div>
+                    <div><dt>Location</dt><dd>{selectedObservation.location}</dd></div>
+                    <div><dt>Timestamp</dt><dd>{selectedObservation.timestamp}</dd></div>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          )}
 
           <footer className="page-footer"><span>Situational awareness · not an operational control system</span><span>Source data must be verified before operational use.</span></footer>
         </div>

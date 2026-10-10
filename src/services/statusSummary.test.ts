@@ -1,6 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { siteConfig } from '../config/siteConfig'
+import { buildSectorObservations } from './sectorView'
 import { summarizeStatuses } from './statusSummary'
+
+describe('buildSectorObservations', () => {
+  it('keeps verified and warning data while filtering stale or missing observations', () => {
+    const view = buildSectorObservations(
+      'telecom',
+      [
+        { status: 'critical', severity: 2, weight: 1.5, id: 'telecom', label: 'Telecom operators', description: 'Capacity signal', metric: '1 disruption', metricLabel: 'operator-reported', updated: '8 min ago', category: 'Digital infrastructure' },
+      ],
+      [
+        { severity: 'critical', service: 'Telecom operators', title: 'Mobile service disruption', location: 'Stockholm County', time: '18:42', note: 'Verified incident' },
+        { severity: 'elevated', service: 'Telecom operators', title: 'Backhaul saturation', location: 'Gothenburg', time: '19:05', note: 'Warning signal' },
+        { severity: 'elevated', service: 'Telecom operators', title: 'Device telemetry delayed', location: 'Malmö', time: '08:00', note: 'Stale feed' },
+      ],
+      'se',
+    )
+
+    expect(view.kpis.some((kpi) => kpi.label === 'Verified incidents')).toBe(true)
+    expect(view.observations).toHaveLength(2)
+    expect(view.observations[0].quality).toBe('verified')
+    expect(view.observations.some((obs) => obs.title === 'Device telemetry delayed')).toBe(false)
+  })
+})
 
 describe('summarizeStatuses', () => {
   it('returns operational when all monitored services are healthy', () => {
