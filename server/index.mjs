@@ -1,6 +1,7 @@
 import { createServer } from 'node:http'
 import { getOverviewForRegion, getSectorForRegion } from './demoData.mjs'
 import { getEnergyData } from './energyData.mjs'
+import { getTelecomDashboard } from './telecomService.mjs'
 
 const port = Number(process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '127.0.0.1'
@@ -49,6 +50,21 @@ const server = createServer(async (request, response) => {
     } catch (error) {
       response.writeHead(400)
       response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Invalid energy query.' }))
+    }
+    return
+  }
+
+  if (url.pathname === '/api/v1/telecom') {
+    try {
+      const result = await getTelecomDashboard({
+        region: url.searchParams.get('region') ?? 'se',
+        period: url.searchParams.get('period') ?? '7d',
+      })
+      response.writeHead(200)
+      response.end(JSON.stringify(result))
+    } catch (error) {
+      response.writeHead(400)
+      response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Invalid telecom query.' }))
     }
     return
   }

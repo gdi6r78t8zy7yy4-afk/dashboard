@@ -10,17 +10,16 @@ export const demoOverview = {
     { id: 'power', label: 'Electricity grid', description: 'Generation and transmission', status: 'unknown', severity: 1, weight: 1.5, metric: 'No live feed', metricLabel: 'grid operating data unavailable', updated: 'Not connected', category: 'Energy' },
     { id: 'energy', label: 'Oil & gas reserves', description: 'Storage and supply outlook', status: 'unknown', severity: 1, weight: 1, metric: 'No live feed', metricLabel: 'source connectivity', updated: 'Not connected', category: 'Energy' },
     { id: 'datacenters', label: 'Datacenters', description: 'Facility capacity and service health', status: 'operational', severity: 0, weight: 1.3, metric: '99.98%', metricLabel: 'service availability', updated: '5 min ago', category: 'Digital infrastructure' },
-    { id: 'telecom', label: 'Telecom operators', description: 'Coverage, capacity and disruptions', status: 'critical', severity: 2, weight: 1.5, metric: '1 disruption', metricLabel: 'operator-reported', updated: '8 min ago', category: 'Digital infrastructure' },
+    { id: 'telecom', label: 'Telecom operators', description: 'Coverage and public internet indicators', status: 'unknown', severity: 1, weight: 1.5, metric: 'No operator feed', metricLabel: 'real-time status unavailable', updated: 'Not connected', category: 'Digital infrastructure' },
     { id: 'networks', label: 'Data networks', description: 'Backbone capacity and incidents', status: 'operational', severity: 0, weight: 1.5, metric: 'Stable', metricLabel: 'network status', updated: 'Demo snapshot', category: 'Digital infrastructure' },
   ],
   incidents: [
     { severity: 'critical', service: 'CERT-SE', title: 'Confirmed cyber advisory', location: 'Sweden', time: '2026-10-10T17:52:00Z', note: 'Verified incident · CERT-SE reflected active exploit telemetry for critical endpoints.' },
-    { severity: 'critical', service: 'Telecom operators', title: 'Mobile service disruption', location: 'Stockholm County', time: '2026-10-10T18:42:00Z', note: 'Verified incident · operator feed not connected' },
     { severity: 'elevated', service: 'Road traffic', title: 'Reduced capacity on E4', location: 'Uppsala County', time: '2026-10-10T18:35:00Z', note: 'Warning signal · traffic feed not connected' },
   ],
   sectors: [
     { id: 'energy', label: 'Energy', status: 'operational', summary: 'Grid is within expected tolerances.', value: 'Stable', region: 'SE' },
-    { id: 'telecom', label: 'Telecom', status: 'critical', summary: 'Urban service degradation has been observed.', value: '1 disruption', region: 'SE' },
+    { id: 'telecom', label: 'Telecom', status: 'unknown', summary: 'Operator-specific real-time availability is not connected.', value: 'No operator feed', region: 'SE' },
     { id: 'internet', label: 'Internet', status: 'elevated', summary: 'Route instability is elevated in the core network.', value: '3 alerts', region: 'SE' },
     { id: 'transport', label: 'Transport', status: 'elevated', summary: 'Road and maritime warnings remain active.', value: '2 warnings', region: 'SE' },
     { id: 'cyber', label: 'Cyber', status: 'critical', summary: 'CERT advisory requires rapid validation.', value: '1 incident', region: 'SE' },
@@ -34,7 +33,6 @@ export const demoOverview = {
   ],
   timeline: [
     { id: 'timeline-1', title: 'CERT advisory published', time: '17:52', source: 'CERT-SE', severity: 'critical', category: 'Cyber' },
-    { id: 'timeline-2', title: 'Service degradation in Stockholm', time: '18:42', source: 'Telecom operators', severity: 'critical', category: 'Telecom' },
     { id: 'timeline-3', title: 'Road capacity warning', time: '18:35', source: 'Trafikverket', severity: 'elevated', category: 'Transport' },
     { id: 'timeline-4', title: 'Navigation advisory issued', time: '18:12', source: 'Sjöfartsverket', severity: 'elevated', category: 'Transport' },
   ],
@@ -51,61 +49,16 @@ const demoSectorViews = {
   telecom: {
     id: 'telecom',
     label: 'Telecom operators',
-    headline: 'Network congestion is concentrated in major urban cells and interconnection points.',
-    status: 'critical',
-    qualityNote: 'Demo mode is active. Source quality is tracked explicitly and stale or missing data is excluded from the summary.',
+    headline: 'Operator-specific real-time availability is not connected. Public routing and annual coverage data are available in the telecom dashboard.',
+    status: 'unknown',
+    qualityNote: 'No operator-specific source is connected. Routing observations do not establish mobile operator or tower availability.',
     kpis: [
-      { label: 'Verified incidents', value: '1', trend: 'last 24h', status: 'critical' },
-      { label: 'Warnings', value: '1', trend: 'active', status: 'elevated' },
-      { label: 'Technical observations', value: '2', trend: 'last 4h', status: 'elevated' },
-      { label: 'Risk indicators', value: '1', trend: 'source quality', status: 'critical' },
+      { label: 'Operator feeds', value: '0', trend: 'configured', status: 'unknown' },
+      { label: 'Mobile outages', value: 'No data', trend: 'operator-specific', status: 'unknown' },
+      { label: 'Public routing sources', value: '2', trend: 'RIPE RIS, IODA', status: 'operational' },
+      { label: 'Coverage statistics', value: 'Annual', trend: 'PTS 2025', status: 'unknown' },
     ],
-    observations: [
-      {
-        id: 'telecom-verified-1',
-        title: 'Mobile service disruption',
-        summary: 'Verified incident from operator feed, localized to Stockholm County and major transit corridors.',
-        kind: 'verified_incident',
-        quality: 'verified',
-        source: 'Telecom operators',
-        location: 'Stockholm County',
-        timestamp: '18:42 CET',
-        severity: 'critical',
-      },
-      {
-        id: 'telecom-warning-1',
-        title: 'Backhaul saturation',
-        summary: 'Warning signal indicates elevated latency and packet loss during peak mobile demand.',
-        kind: 'warning',
-        quality: 'provisional',
-        source: 'Monitoring API',
-        location: 'Gothenburg',
-        timestamp: '19:05 CET',
-        severity: 'elevated',
-      },
-      {
-        id: 'telecom-tech-1',
-        title: 'Routing telemetry delay',
-        summary: 'Backend telemetry is delayed by a short interval and should be considered provisional until refreshed.',
-        kind: 'technical_observation',
-        quality: 'provisional',
-        source: 'Edge telemetry',
-        location: 'Malmö',
-        timestamp: '18:58 CET',
-        severity: 'elevated',
-      },
-      {
-        id: 'telecom-tech-2',
-        title: 'Device telemetry delayed',
-        summary: 'Stale feed from a secondary device stream; value withheld because it exceeds acceptable freshness.',
-        kind: 'technical_observation',
-        quality: 'stale',
-        source: 'Field sensors',
-        location: 'Norrköping',
-        timestamp: '08:00 CET',
-        severity: 'elevated',
-      },
-    ],
+    observations: [],
   },
 }
 
@@ -144,7 +97,20 @@ export function getOverviewForRegion(region) {
 
 export function getSectorForRegion(region, sectorId = 'telecom') {
   const safeRegion = region ?? 'se'
-  const sector = demoSectorViews[sectorId] ?? demoSectorViews.telecom
+  const sector = demoSectorViews[sectorId]
+
+  if (!sector) {
+    return {
+      mode: 'demo',
+      id: sectorId,
+      label: 'Data unavailable',
+      headline: 'No sector-specific data source is configured for this dashboard.',
+      status: 'unknown',
+      qualityNote: 'Missing sector data is shown as unknown and is not inferred from another sector.',
+      kpis: [],
+      observations: [],
+    }
+  }
 
   if (safeRegion !== 'se') {
     return {

@@ -214,6 +214,54 @@ h2 { margin: 0; color: #28312b; font-size: 14px; font-weight: 600; }
 .energy-flow-note { display: block; margin-top: 9px; color: #969c95; font-size: 8px; line-height: 1.5; }
 .energy-status.partial { background: #f8f1e5; color: #a67637; }
 
+.telecom-dashboard { display: grid; gap: 12px; margin-top: 18px; }
+.telecom-header-panel { display: grid; gap: 10px; border: 1px solid #e6e9e3; border-radius: 7px; background: #fff; padding: 15px 17px; }
+.telecom-heading { display: flex; align-items: center; gap: 10px; }
+.telecom-heading-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 7px; background: #edf4ef; color: #387c65; }
+.telecom-heading h2 { font-size: 14px; }
+.telecom-header-panel > p { margin: 0; color: #858b84; font-size: 9px; line-height: 1.5; }
+.telecom-period { display: grid; gap: 4px; margin-left: auto; color: #777f77; font-size: 8px; font-weight: 700; }
+.telecom-period select { height: 32px; min-width: 140px; border: 1px solid #e3e8e1; border-radius: 5px; background: #fbfcfa; padding: 0 8px; color: #39463f; font-size: 10px; }
+.telecom-caveat { display: flex; align-items: flex-start; gap: 8px; border: 1px solid #ebdec9; border-radius: 6px; background: #fbf7ef; padding: 11px 12px; color: #806941; font-size: 9px; line-height: 1.55; }
+.telecom-caveat svg { flex: 0 0 auto; margin-top: 1px; }
+.telecom-caveat strong { color: #725a38; }
+.telecom-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.telecom-metric { display: grid; min-width: 0; gap: 6px; border: 1px solid #e6e9e3; border-radius: 7px; background: #fff; padding: 12px 13px; }
+.telecom-metric > span { color: #818980; font-size: 8px; }
+.telecom-metric > strong { overflow: hidden; color: #2c3930; font-size: 17px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.telecom-metric > small { color: #949b93; font-size: 8px; line-height: 1.5; }
+.telecom-visual-grid, .telecom-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.telecom-coverage-panel h2, .telecom-routing-panel h2, .telecom-ioda-panel h2, .telecom-quality-panel h2 { font-size: 12px; }
+.telecom-source-status { display: inline-flex; align-items: center; gap: 5px; border-radius: 4px; background: #edf0eb; padding: 4px 6px; color: #687268; font-size: 8px; font-weight: 600; white-space: nowrap; }
+.telecom-source-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.telecom-source-status.ok { background: #edf5ef; color: #4b8065; }
+.telecom-source-status.partial, .telecom-source-status.unavailable { background: #f8f1e5; color: #a67637; }
+.telecom-source-status.stale, .telecom-source-status.error { background: #f8eeeb; color: #b65f51; }
+.telecom-source-status.not_applicable { background: #f0f1ef; color: #757d75; }
+.telecom-chart-legend { display: flex; flex-wrap: wrap; gap: 8px 15px; margin-top: 10px; color: #747d75; font-size: 8px; }
+.telecom-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.telecom-chart-legend i { width: 8px; height: 8px; border-radius: 2px; }
+.fiveg-swatch { background: #387c65; }
+.fast-mobile-swatch { background: #c8893d; }
+.telecom-coverage-chart { width: 100%; height: 530px; margin-top: 9px; }
+.telecom-route-chart { width: 100%; height: 250px; margin-top: 12px; }
+.telecom-ioda-chart { width: 100%; height: 180px; margin-top: 10px; }
+.telecom-panel-note { margin: 9px 0 0; color: #838b83; font-size: 8px; line-height: 1.55; }
+.telecom-source-note { display: block; margin-top: 7px; color: #929990; font-size: 8px; line-height: 1.5; }
+.telecom-empty { display: grid; min-height: 120px; align-content: center; border-top: 1px solid #f0f1ee; padding: 12px; color: #858d85; font-size: 9px; line-height: 1.5; }
+.telecom-empty.compact { min-height: 0; margin-top: 8px; border: 1px solid #edf0eb; border-radius: 5px; background: #fbfcfa; }
+.telecom-source-row { display: flex; align-items: center; justify-content: space-between; gap: 9px; border-top: 1px solid #f0f1ee; padding: 9px 0; }
+.telecom-source-row strong { display: block; color: #404b42; font-size: 9px; }
+.telecom-source-row small { display: block; margin-top: 3px; color: #8a928a; font-size: 8px; line-height: 1.45; }
+.telecom-source-row-meta { display: grid; justify-items: end; gap: 4px; }
+.telecom-source-row-meta > small { text-align: right; white-space: nowrap; }
+.telecom-unavailable { display: grid; gap: 4px; margin-top: 9px; border: 1px solid #f0e4ce; border-radius: 5px; background: #fcf8f0; padding: 9px; color: #89724d; font-size: 8px; line-height: 1.5; }
+.telecom-unavailable strong { color: #745d3b; font-size: 9px; }
+.telecom-event-list { display: grid; gap: 6px; margin-top: 8px; }
+.telecom-event-list > div { display: grid; gap: 4px; border-top: 1px solid #f0f1ee; padding: 8px 0 0; }
+.telecom-event-list strong { color: #4a564d; font-size: 9px; }
+.telecom-event-list span { color: #899188; font-size: 8px; }
+
 .sector-panel { margin-top: 18px; border: 1px solid #e6e9e3; border-radius: 8px; background: #fffdfb; padding: 18px; }
 .sector-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sector-headline { margin: 8px 0 16px; color: #4e5b53; font-size: 11px; line-height: 1.6; }
@@ -283,6 +331,8 @@ h2 { margin: 0; color: #28312b; font-size: 14px; font-weight: 600; }
   .banner-stats { gap: 12px; padding-right: 0; }
   .lower-grid { grid-template-columns: 1fr; }
   .energy-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .telecom-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .telecom-visual-grid, .telecom-detail-grid { grid-template-columns: 1fr; }
   .source-panel > p { max-width: 460px; }
 }
 @media (max-width: 680px) {
@@ -319,6 +369,10 @@ h2 { margin: 0; color: #28312b; font-size: 14px; font-weight: 600; }
   .section-heading { align-items: center; }
   .service-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .energy-chart-grid, .energy-detail-grid { grid-template-columns: 1fr; }
+  .telecom-heading { flex-wrap: wrap; }
+  .telecom-period { width: 100%; margin-left: 44px; }
+  .telecom-period select { width: 100%; }
+  .telecom-coverage-chart { height: 480px; }
   .energy-selectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .energy-selectors label { min-width: 0; }
   .energy-updated { grid-column: 1 / -1; margin-left: 0; }

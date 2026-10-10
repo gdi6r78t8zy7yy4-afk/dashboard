@@ -26,6 +26,7 @@ import { summarizeStatuses } from './services/statusSummary'
 import type { ServiceStatus, StatusLevel } from './services/statusSummary'
 
 const EnergyDashboard = lazy(() => import('./EnergyDashboard'))
+const TelecomDashboard = lazy(() => import('./TelecomDashboard'))
 
 type DashboardId =
   | 'overview'
@@ -246,7 +247,7 @@ function App() {
   }, [activeRegion])
 
   useEffect(() => {
-    if (activeDashboard === 'overview' || activeDashboard === 'power') {
+    if (activeDashboard === 'overview' || activeDashboard === 'power' || activeDashboard === 'telecom') {
       setSectorData(null)
       setSelectedObservation(null)
       return
@@ -284,6 +285,7 @@ function App() {
     : services.filter((service) => service.id === activeDashboard)
   const summary = useMemo(() => summarizeStatuses(services, siteConfig.statusSummary), [services])
   const currentDashboard = dashboards.find((dashboard) => dashboard.id === activeDashboard) ?? dashboards[0]
+  const isProviderDashboard = activeDashboard === 'power' || activeDashboard === 'telecom'
   const statusCounts = services.reduce(
     (counts, service) => ({ ...counts, [service.status]: counts[service.status] + 1 }),
     { operational: 0, elevated: 0, critical: 0, unknown: 0 },
@@ -342,7 +344,7 @@ function App() {
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="connection-state"><span className="connection-dot" /><span><strong>{activeDashboard === 'power' ? 'Mixed source data' : 'Demo data'}</strong><small>{activeDashboard === 'power' ? 'SMHI observations · ENTSO-E status below' : 'No live sources connected'}</small></span></div>
+          <div className="connection-state"><span className="connection-dot" /><span><strong>{isProviderDashboard ? 'Mixed source data' : 'Demo data'}</strong><small>{activeDashboard === 'power' ? 'SMHI observations · ENTSO-E status below' : activeDashboard === 'telecom' ? 'PTS annual data · RIPEstat and IODA live' : 'No live sources connected'}</small></span></div>
           <a className="help-link" href="#data-provenance"><CircleHelp size={16} />Data & methodology</a>
         </div>
       </aside>
@@ -351,10 +353,10 @@ function App() {
         <header className="topbar">
           <div className="breadcrumb"><span>Situation room</span><span className="breadcrumb-divider">/</span><strong>{currentDashboard.label}</strong></div>
           <div className="topbar-actions">
-            <span className="demo-indicator"><span /> {activeDashboard === 'power' ? 'MIXED SOURCE DATA' : 'SIMULATED DATA'}</span>
+            <span className="demo-indicator"><span /> {isProviderDashboard ? 'MIXED SOURCE DATA' : 'SIMULATED DATA'}</span>
             <button className="icon-button notification-button" type="button" aria-label="Notifications" aria-expanded={showNotifications} onClick={() => setShowNotifications(!showNotifications)}><Bell size={17} /><span /></button>
             <span className="topbar-divider" />
-            <time className="updated-at" dateTime={activeDashboard === 'power' ? undefined : '2026-10-09T18:47:00+02:00'}>{activeDashboard === 'power' ? <>Provider timestamps<span>Shown below</span></> : <>09 Oct 2026 <span>18:47 CET</span></>}</time>
+            <time className="updated-at" dateTime={isProviderDashboard ? undefined : '2026-10-09T18:47:00+02:00'}>{isProviderDashboard ? <>Provider timestamps<span>Shown below</span></> : <>09 Oct 2026 <span>18:47 CET</span></>}</time>
             {showNotifications && <div className="notification-popover" role="status"><strong>3 active signals</strong><span>1 critical · 2 elevated</span></div>}
           </div>
         </header>
@@ -364,12 +366,12 @@ function App() {
             <div>
               <div className="eyebrow"><span className="eyebrow-line" /> NORDIC INFRASTRUCTURE PICTURE</div>
               <h1>{activeDashboard === 'overview' ? 'Situation overview' : currentDashboard.label}<span className="heading-period">.</span></h1>
-              <p>{activeDashboard === 'power' ? 'Choose a country, bidding zone, and period; source quality and freshness are shown below.' : `Coordinated view of essential services across ${selectedRegion.label}.`}</p>
+              <p>{activeDashboard === 'power' ? 'Choose a country, bidding zone, and period; source quality and freshness are shown below.' : activeDashboard === 'telecom' ? 'Annual coverage and public routing/outage indicators are shown with their geographic precision and data limits.' : `Coordinated view of essential services across ${selectedRegion.label}.`}</p>
             </div>
-            <div className="last-updated"><span className={`live-dot ${activeDashboard === 'power' ? 'muted' : ''}`} />{activeDashboard === 'power' ? 'Provider updates shown below' : <>Demo snapshot <span>·</span> 18:47 CET</>}</div>
+            <div className="last-updated"><span className={`live-dot ${isProviderDashboard ? 'muted' : ''}`} />{isProviderDashboard ? 'Provider updates shown below' : <>Demo snapshot <span>·</span> 18:47 CET</>}</div>
           </section>
 
-          {activeDashboard !== 'power' && <section className={`situation-banner ${summary.level}`} aria-label="Overall situation summary">
+          {!isProviderDashboard && <section className={`situation-banner ${summary.level}`} aria-label="Overall situation summary">
             <div className="banner-symbol">
               {summary.level === 'critical' ? <AlertTriangle size={21} /> : <Gauge size={21} />}
             </div>
@@ -488,6 +490,7 @@ function App() {
           )}
 
           {activeDashboard === 'power' && <Suspense fallback={<p className="data-message" role="status">Loading energy dashboard…</p>}><EnergyDashboard /></Suspense>}
+          {activeDashboard === 'telecom' && <Suspense fallback={<p className="data-message" role="status">Loading telecom sources…</p>}><TelecomDashboard region={activeRegion} /></Suspense>}
 
           {activeDashboard === 'overview' && overviewData && (
             <>
@@ -581,7 +584,7 @@ function App() {
             </>
           )}
 
-          <section className="lower-grid">
+          {activeDashboard !== 'power' && activeDashboard !== 'telecom' && <section className="lower-grid">
             <article className="panel incident-panel">
               <div className="panel-heading">
                 <div><div className="section-kicker">NEEDS ATTENTION</div><h2>Active incidents & advisories</h2></div>
@@ -606,7 +609,7 @@ function App() {
               <div className="source-meter"><div><span>Connected sources</span><strong>{overviewData?.sources.filter((source) => source.status === 'ok').length ?? 0} <small>/ {overviewData?.sources.length ?? 0} domains</small></strong></div><span className="meter-track"><i style={{ width: `${Math.max(10, ((overviewData?.sources.filter((source) => source.status === 'ok').length ?? 0) / (overviewData?.sources.length || 1)) * 100)}%` }} /></span></div>
               <a className="source-link" href="/api/v1/overview?region=se" rel="noreferrer" target="_blank">Inspect demo API response <ArrowUpRight size={14} /></a>
             </article>
-          </section>
+          </section>}
 
           {selectedObservation && (
             <div className="detail-sheet" role="dialog" aria-modal="true" aria-label={selectedObservation.title}>

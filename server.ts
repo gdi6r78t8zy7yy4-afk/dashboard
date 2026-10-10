@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getOverviewForRegion, getSectorForRegion } from './server/demoData.mjs'
 import { getEnergyData } from './server/energyData.mjs'
+import { getTelecomDashboard } from './server/telecomService.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -35,6 +36,16 @@ async function startServer() {
       res.json(await getEnergyData({ country, zone, period }))
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid energy query.' })
+    }
+  })
+
+  app.get('/api/v1/telecom', async (req: Request, res: Response) => {
+    const region = typeof req.query.region === 'string' ? req.query.region : 'se'
+    const period = typeof req.query.period === 'string' ? req.query.period : '7d'
+    try {
+      res.json(await getTelecomDashboard({ region, period }))
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid telecom query.' })
     }
   })
 
