@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -24,6 +24,8 @@ import type { LucideIcon } from 'lucide-react'
 import { siteConfig } from './config/siteConfig'
 import { summarizeStatuses } from './services/statusSummary'
 import type { ServiceStatus, StatusLevel } from './services/statusSummary'
+
+const EnergyDashboard = lazy(() => import('./EnergyDashboard'))
 
 type DashboardId =
   | 'overview'
@@ -244,7 +246,7 @@ function App() {
   }, [activeRegion])
 
   useEffect(() => {
-    if (activeDashboard === 'overview') {
+    if (activeDashboard === 'overview' || activeDashboard === 'power') {
       setSectorData(null)
       setSelectedObservation(null)
       return
@@ -340,7 +342,7 @@ function App() {
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="connection-state"><span className="connection-dot" /><span><strong>Demo data</strong><small>No live sources connected</small></span></div>
+          <div className="connection-state"><span className="connection-dot" /><span><strong>{activeDashboard === 'power' ? 'Mixed source data' : 'Demo data'}</strong><small>{activeDashboard === 'power' ? 'SMHI observations · ENTSO-E status below' : 'No live sources connected'}</small></span></div>
           <a className="help-link" href="#data-provenance"><CircleHelp size={16} />Data & methodology</a>
         </div>
       </aside>
@@ -349,10 +351,10 @@ function App() {
         <header className="topbar">
           <div className="breadcrumb"><span>Situation room</span><span className="breadcrumb-divider">/</span><strong>{currentDashboard.label}</strong></div>
           <div className="topbar-actions">
-            <span className="demo-indicator"><span /> SIMULATED DATA</span>
+            <span className="demo-indicator"><span /> {activeDashboard === 'power' ? 'MIXED SOURCE DATA' : 'SIMULATED DATA'}</span>
             <button className="icon-button notification-button" type="button" aria-label="Notifications" aria-expanded={showNotifications} onClick={() => setShowNotifications(!showNotifications)}><Bell size={17} /><span /></button>
             <span className="topbar-divider" />
-            <time className="updated-at" dateTime="2026-10-09T18:47:00+02:00">09 Oct 2026 <span>18:47 CET</span></time>
+            <time className="updated-at" dateTime={activeDashboard === 'power' ? undefined : '2026-10-09T18:47:00+02:00'}>{activeDashboard === 'power' ? <>Provider timestamps<span>Shown below</span></> : <>09 Oct 2026 <span>18:47 CET</span></>}</time>
             {showNotifications && <div className="notification-popover" role="status"><strong>3 active signals</strong><span>1 critical · 2 elevated</span></div>}
           </div>
         </header>
@@ -362,12 +364,12 @@ function App() {
             <div>
               <div className="eyebrow"><span className="eyebrow-line" /> NORDIC INFRASTRUCTURE PICTURE</div>
               <h1>{activeDashboard === 'overview' ? 'Situation overview' : currentDashboard.label}<span className="heading-period">.</span></h1>
-              <p>Coordinated view of essential services across {selectedRegion.label}.</p>
+              <p>{activeDashboard === 'power' ? 'Choose a country, bidding zone, and period; source quality and freshness are shown below.' : `Coordinated view of essential services across ${selectedRegion.label}.`}</p>
             </div>
-            <div className="last-updated"><span className="live-dot" /> Demo snapshot <span>·</span> 18:47 CET</div>
+            <div className="last-updated"><span className={`live-dot ${activeDashboard === 'power' ? 'muted' : ''}`} />{activeDashboard === 'power' ? 'Provider updates shown below' : <>Demo snapshot <span>·</span> 18:47 CET</>}</div>
           </section>
 
-          <section className={`situation-banner ${summary.level}`} aria-label="Overall situation summary">
+          {activeDashboard !== 'power' && <section className={`situation-banner ${summary.level}`} aria-label="Overall situation summary">
             <div className="banner-symbol">
               {summary.level === 'critical' ? <AlertTriangle size={21} /> : <Gauge size={21} />}
             </div>
@@ -383,7 +385,7 @@ function App() {
               <div><strong>{statusCounts.unknown}</strong><span>No data</span></div>
             </div>
             <span className="summary-config">{siteConfig.statusSummary.method}</span>
-          </section>
+          </section>}
           {dataError && <div className="data-error" role="alert">Situation data is unavailable: {dataError}</div>}
 
           <section className="section-heading">
@@ -484,6 +486,8 @@ function App() {
               </div>
             </section>
           )}
+
+          {activeDashboard === 'power' && <Suspense fallback={<p className="data-message" role="status">Loading energy dashboard…</p>}><EnergyDashboard /></Suspense>}
 
           {activeDashboard === 'overview' && overviewData && (
             <>

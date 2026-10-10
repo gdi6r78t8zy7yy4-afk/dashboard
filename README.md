@@ -1,6 +1,6 @@
 # Northwatch
 
-A modular situational-awareness dashboard framework for critical infrastructure in Sweden, the Nordic countries, and Europe. The current application is an interactive UI prototype with clearly labelled demonstration data; it does not connect to live operational feeds yet.
+A modular situational-awareness dashboard framework for critical infrastructure in Sweden, the Nordic countries, and Europe. Most infrastructure areas still use clearly labelled demonstration data. The Electricity grid dashboard reads public SMHI weather observations and can query ENTSO-E market/system data when a valid server-side token is configured.
 
 ## Requirements
 
@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. `npm run dev` starts both the frontend and backend API. The left navigation selects an area of interest and an infrastructure dashboard. The overview brings together service health and active advisories; status aggregation is configured in `src/config/siteConfig.ts`. Only Sweden has sample values; other areas correctly report missing feeds until country-specific connectors are implemented.
+Open the local URL printed by Vite. `npm run dev` starts both the frontend and backend API and loads `.env` if present. The overview and other sector dashboards use clearly marked demo data. The Electricity grid dashboard has its own country, bidding-zone, and period controls. Copy `.env.example` to `.env` and set `ENTSOE_API_TOKEN` on the server to enable ENTSO-E queries; the token is never exposed to the browser. Without a token, ENTSO-E values stay explicitly unconfigured.
 
 ## Scripts
 
@@ -24,17 +24,18 @@ Open the local URL printed by Vite. `npm run dev` starts both the frontend and b
 - `npm run typecheck` checks the TypeScript project references.
 - `npm run build` type-checks and creates a production build in `dist/`.
 - `npm run preview` serves the production build locally.
-- `npm test` runs unit tests for configurable situation summaries.
+- `npm test` runs unit tests for situation summaries, demo data, and energy data normalization.
 
 ## Application architecture
 
 - **Frontend:** React and TypeScript own navigation, visualization, accessible status indicators, and dashboard composition.
 - **Backend:** `server/index.mjs` exposes a small versioned API, and the Vite dev server proxies `/api` to it. The server owns demo responses now; the browser consumes them through the same API boundary intended for provider data.
-- **Backend integration milestone:** add provider adapters, scheduled polling, normalization, freshness/provenance, and alerting to the API service. `.env.example` lists server-only credential names; copy it to `.env` for local secrets. Never use `VITE_` for provider credentials or return secrets to the browser.
+- **Backend integration:** `server/energyData.mjs` implements server-side ENTSO-E requests and SMHI observations. `.env.example` lists server-only credential names; copy it to `.env` for local secrets. Never use `VITE_` for provider credentials or return secrets to the browser.
 - **Provider adapters:** implement one adapter per source in the backend, normalize responses into a shared service/observation contract, and expose versioned read-only endpoints to the frontend. Keep provider-specific failures and stale data visible instead of presenting them as healthy.
 - **Sector dashboard:** the Telecom operators dashboard uses the same app shell and region filtering as the overview, but adds a dedicated sector view with KPI cards, source-quality metadata, observation filtering, stale-data checks, and clickable event details. Demo mode remains explicitly labelled and should never be mistaken for operational status.
+- **Energy dashboard:** the Electricity grid view supports Sweden (SE1-SE4), Norway (NO1-NO5), Denmark (DK1-DK2), and Finland (FI). It queries ENTSO-E day-ahead prices (A44/A01), actual and forecast generation (A75/A16 and A71/A01), actual and forecast load (A65/A16 and A65/A01), and cross-border energy (A11/A16). Data is normalized from XML on the server. ENTSO-E requests remain unavailable until an authorized `ENTSOE_API_TOKEN` is configured. SMHI hourly temperature, wind, and precipitation observations are fetched from active nearby stations for Swedish zones. See [docs/ENERGY-DATA.md](./docs/ENERGY-DATA.md) for tested coverage and limitations.
 - **Configuration:** site summary thresholds, status weights, and display descriptions are centralized in `src/config/siteConfig.ts`. Change this policy through reviewed deployment configuration rather than hard-coding provider rules into dashboard components.
-- **Live-data boundary:** current service cards and incidents are illustrative sample data served by the backend. No provider connectors are active. Connectors must not be considered operational until their access, update cadence, licensing, and outage behavior have been validated.
+- **Live-data boundary:** the overview and non-energy dashboards remain illustrative sample data. ENTSO-E data types have adapter support but have not been verified against a real authenticated response in this environment. Public SMHI observation responses were verified live. Electricity prices are market data, not evidence of grid stability; weather is contextual only. Missing outage messages and grid-disturbance feeds are shown as unavailable, not healthy.
 
 ## API discovery
 

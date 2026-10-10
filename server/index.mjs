@@ -1,10 +1,11 @@
 import { createServer } from 'node:http'
 import { getOverviewForRegion, getSectorForRegion } from './demoData.mjs'
+import { getEnergyData } from './energyData.mjs'
 
 const port = Number(process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '127.0.0.1'
 
-const server = createServer((request, response) => {
+const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost')
   response.setHeader('Content-Type', 'application/json; charset=utf-8')
   response.setHeader('Cache-Control', 'no-store')
@@ -33,6 +34,22 @@ const server = createServer((request, response) => {
     const region = url.searchParams.get('region') ?? 'se'
     const id = url.searchParams.get('id') ?? 'telecom'
     response.end(JSON.stringify(getSectorForRegion(region, id)))
+    return
+  }
+
+  if (url.pathname === '/api/v1/energy') {
+    try {
+      const result = await getEnergyData({
+        country: url.searchParams.get('country') ?? 'se',
+        zone: url.searchParams.get('zone') ?? undefined,
+        period: url.searchParams.get('period') ?? '24h',
+      })
+      response.writeHead(200)
+      response.end(JSON.stringify(result))
+    } catch (error) {
+      response.writeHead(400)
+      response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Invalid energy query.' }))
+    }
     return
   }
 

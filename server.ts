@@ -2,6 +2,7 @@ import express, { type Request, type Response } from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getOverviewForRegion, getSectorForRegion } from './server/demoData.mjs'
+import { getEnergyData } from './server/energyData.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -24,6 +25,17 @@ async function startServer() {
     const region = typeof req.query.region === 'string' ? req.query.region : 'se'
     const id = typeof req.query.id === 'string' ? req.query.id : 'telecom'
     res.json(getSectorForRegion(region, id))
+  })
+
+  app.get('/api/v1/energy', async (req: Request, res: Response) => {
+    const country = typeof req.query.country === 'string' ? req.query.country : 'se'
+    const zone = typeof req.query.zone === 'string' ? req.query.zone : undefined
+    const period = typeof req.query.period === 'string' ? req.query.period : '24h'
+    try {
+      res.json(await getEnergyData({ country, zone, period }))
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid energy query.' })
+    }
   })
 
   if (!isProduction) {
