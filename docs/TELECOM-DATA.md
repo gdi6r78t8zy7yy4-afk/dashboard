@@ -1,35 +1,104 @@
-# Telecom Data Coverage
+# Telekom & Digital Infrastruktur – Datatäckning och integrationer
 
-## API
+Dokumentation över anslutna datakällor, geografisk precision, tidsintervall, verifieringsresultat och gränssnittets metodologiska avgränsningar för Infrastructure Watch.
 
-The telecom view requests `GET /api/v1/telecom?region=se&period=7d`. Supported routing/outage periods are `24h`, `7d`, and `30d`. PTS coverage is an annual snapshot and is unchanged by that period selector. The current integration is Sweden-only; other selected regions return `not_applicable` rather than reusing Swedish observations.
+---
 
-Backend response types are shared with the frontend in `src/services/telecomTypes.ts`. Each provider result includes its source, source URL, retrieval time, observation/reference period, geographic precision, sampling resolution, and quality class.
+## 1. API-gränssnitt
 
-## PTS Coverage
+Endpunkten exponeras på:
+`GET /api/v1/telecom?region={region}&period={period}`
 
-The adapter downloads the official [PTS 2025 mobile coverage workbook](https://statistik.pts.se/files/mobiltacknings-och-bredbandskartlaggning/mtbbk_25-17220_tabellbilaga_mobilt%C3%A4ckning_v1.0.xlsx) and parses the `Yttäckning 2025` sheet. It selects the PTS columns for all operators at 8 dB attenuation: at least 10 Mbit/s, at least 100 Mbit/s, and 5G. It returns the 21 county aggregate rows; the workbook also contains municipality rows, but this view does not claim finer-than-county visual precision. Percentages and threshold values such as `>99,99%` retain their qualifiers.
+### Parametrar
+- `region`: `se` (Sverige), `no` (Norge), `dk` (Danmark), `fi` (Finland), `is` (Island), `nordics` (Norden), `europe` (Europa). Standardvärde: `se`.
+- `period`: `24h` (24 timmar), `7d` (7 dagar), `30d` (30 dagar). Standardvärde: `7d`.
 
-The workbook states that this coverage represents November 2025 and excludes water surfaces for Vänern, Vättern, Mälaren, and the Baltic Sea. PTS coverage is an annual network-availability estimate, not a real-time service test. Its geographic values must not be treated as live outage or cell-site status.
+### Responsmönster och gemensam modell
+Svaret följer typmodellen `TelecomDashboardResponse` i `src/services/telecomTypes.ts`. Varje källkomponent kapslas i `TelecomSource<T>` och innehåller:
+- `state`: `'ok'` | `'partial'` | `'stale'` | `'unavailable'` | `'error'` | `'not_applicable'`.
+- `provenance`:
+  - `source`: Namn på leverantör/institution.
+  - `sourceUrl`: URL till officiell dokumentation eller datakälla.
+  - `retrievedAt`: Tidpunkt då backend hämtade datat (ISO-8601).
+  - `observedAt`: Ursprunglig observationstidpunkt eller snapshot-datum.
+  - `referencePeriod`: Den period eller tidsram observationen avser.
+  - `geographicPrecision`: `'country'` | `'county'` | `'network-observation'` | `'multi-country'` | `'none'`.
+  - `resolution`: Samplingsfrekvens eller aggregeringsnivå.
+  - `quality`: `'official-statistic'` | `'routing-observation'` | `'internet-outage-indicator'` | `'missing'`.
+- `data`: Det typade nyttolastobjektet.
+- `note`: Metodologisk anmärkning eller orsak till eventuell begränsning.
 
-The workbook was downloaded and parsed from PTS during live verification on 2026-10-10 (HTTP 200, 348 kB, 21 county rows). The adapter caches the workbook for six hours. PTS's coverage portal also publishes broader regional and municipality data; the dashboard displays county totals only.
+---
 
-## RIPEstat And RIPE RIS
+## 2. Källdetaljer och integrationer
 
-The adapter calls the public RIPEstat `country-routing-stats` endpoint with ISO country `SE` and explicit `starttime`/`endtime` values, plus `country-asns` for registered/routed ASN counts. The current view requests 24-hour, 7-day, or 30-day intervals. RIPEstat chooses the available sample resolution and exposes the actual query bounds; RIS snapshots are periodic, not continuous user-level probes.
+### A. Post- och telestyrelsen (PTS) – Officiell täckningskartläggning
+- **Källa**: PTS Mobiltäcknings- och bredbandskartläggning.
+- **Officiell länk**: [statistik.pts.se/mobiltacknings-och-bredbandskartlaggning](https://statistik.pts.se/mobiltacknings-och-bredbandskartlaggning)
+- **Datafil**: [Officiell tabellbilaga MTBBK 2025 v1.0 (XLSX)](https://statistik.pts.se/files/mobiltacknings-och-bredbandskartlaggning/mtbbk_25-17220_tabellbilaga_mobilt%C3%A4ckning_v1.0.xlsx).
+- **Mätperiod & referens**: Årlig nationell modellberäkning med referenstidpunkt **november 2025**.
+- **Geografisk omfattning**: Samtliga Sveriges 21 län. (För andra regioner returneras `state: 'not_applicable'` med information om att PTS enbart kartlägger Sverige).
+- **Mätetal vid 8 dB dämpning**:
+  - `Alla operatörer - 5G - 8 db` (5G-yttäckning)
+  - `Alla operatörer - minst 100 Mbit/s - 8 db` (Snabb mobil bredbandstäckning)
+  - `Alla operatörer - minst 10 Mbit/s - 8 db` (Grundläggande mobil bredbandstäckning)
+- **Dämpningsstandard**: 8 dB motsvarar PTS standardberäkning för tillförlitlig handhållen mobil mottagning.
+- **Cache**: Arbetsboken cachas i internminnet i 6 timmar.
 
-Live verification on 2026-10-10 returned HTTP 200 for Sweden. The bounded seven-day query returned 60 routing observations with latest data dated 2026-10-10. The dashboard displays prefix and ASN counts as country-level routing observations only. They do not establish mobile availability, operator service, or end-user reachability.
+### B. RIPEstat & RIPE RIS – Global BGP-routing och prefix
+- **Källa**: RIPE Network Coordination Centre (RIPE NCC) & Routing Information Service (RIS).
+- **Officiell länk**: [stat.ripe.net/docs/data-api/ripestat-data-api](https://stat.ripe.net/docs/data-api/ripestat-data-api) / [ris.ripe.net](https://ris.ripe.net/)
+- **Anropade endpunkter**:
+  - `/data/country-routing-stats/data.json?resource={country}&starttime={start}&endtime={end}`: Dagliga observationer av IPv4- och IPv6-prefix synliga i RIS.
+  - `/data/country-asns/data.json?resource={country}`: Antal registrerade och faktiskt annonserade/routade autonoma system (ASN).
+- **Geografisk omfattning**: Landskod (ISO-3166-1 alpha-2) eller flerlandsklustring (Norden, Europa).
+- **Upplösning**: Daglig historik över 24 timmar, 7 dagar eller 30 dagar.
+- **Mätmetod**: Observationer från distribuerade BGP route collectors (RIS).
 
-## IODA
+### C. IODA – Internet Outage Detection and Analysis
+- **Källa**: Georgia Tech InetIntel / IODA v2 API.
+- **Officiell länk**: [api.ioda.inetintel.cc.gatech.edu/v2/docs](https://api.ioda.inetintel.cc.gatech.edu/v2/docs)
+- **Anropade endpunkter**:
+  - `/outages/summary`: Sammanfattning av avbrott för landet/regionen.
+  - `/outages/events`: Verifierade avbrottshändelser.
+  - `/outages/alerts`: Automatiska avbrottslarm.
+  - `/signals/events/country/{country}`: Sammansatt tidsserieindikator.
+- **Tidsintervall**: Dynamiskt beräknat utifrån vald period (`24h`, `7d`, `30d`) med Unix epoch-sekunder.
+- **Upplösning**: 30-minuters samplingssteg.
+- **Mätmetod**: Makroindikator sammanställd från active probing (ping/traceroute), BGP-routingförändringar och network telescope (darknet-trafik).
 
-The adapter uses IODA v2 country-scope endpoints for outage summaries, events, alerts, and `signals/events/country/SE`, with `from` and `until` expressed as Unix epoch seconds. Its signal series is sampled at 30-minute steps in the tested response. The displayed period selector bounds this data.
+---
 
-Live verification on 2026-10-10 returned HTTP 200 for Sweden with 338 half-hour signal samples in a seven-day interval and no outage events/alerts in that period. An empty event result is phrased as “no IODA events published in this time window”; it does not assert that every operator/service was available. IODA identifies internet-outage indicators and is not a complete provider status feed.
+## 3. Viktiga avgränsningar och integritetsregler
 
-## Missing Data And Incidents
+1. **PTS är inte realtidsdata**:
+   - PTS kartläggning bygger på teleoperatörernas årliga teoretiska beräkningar och fältvalideringar för november månad. Det är ett statistiskt planeringsunderlag och kan aldrig användas för att avgöra om en basstation fungerar just nu.
+2. **RIPE RIS mäter routing, inte mobiltäckning**:
+   - RIPE RIS registrerar globalt propagerade BGP-rutter. Att rutter finns indikerar att autonoma system annonserar IP-adresser till omvärlden, men garanterar inte att en slutanvändares mobiluppkoppling fungerar.
+3. **IODA visar makrostörningar**:
+   - IODA detekterar större regionala och nationella avvikelser. Att IODA inte visar några larm innebär inte att inga lokala driftstörningar förekommer.
+4. **Ingen basstation eller område markeras som ur funktion**:
+   - Varken PTS, RIPEstat eller IODA innehåller data på basstationsnivå. Gränssnittet markerar uttryckligen aldrig en mobilmast eller ett län som trasigt baserat på dessa källor.
+5. **Operatörsspecifik realtidsstatus**:
+   - De svenska mobiloperatörerna (Telia, Telenor, Tele2, Tre) tillhandahåller inte öppna maskinläsbara realtids-API:er för sina driftstörningar. Gränssnittet visar därför transparent att operatörsspecifik realtidsdrift för närvarande är ej tillgänglig (`unavailable`).
 
-No operator-specific real-time status or verified public operator notice feed is connected. The UI says so directly. RIPE RIS, RIPEstat, and IODA observations do not indicate that a particular mobile tower or geographic area is out of service. No fault state is inferred from those signals.
+---
 
-## Tests
+## 4. Liveverifiering mot riktiga API-svar
 
-`server/telecomPts.test.mjs` validates workbook XML, county extraction, percentage normalization, and threshold qualifiers using a generated XLSX fixture. `server/telecomProviders.test.mjs` tests RIPEstat response normalization, IODA signal timing, event de-duplication, and empty-feed semantics. `server/telecomService.test.mjs` verifies source aggregation, geography, unavailable operator status, period validation, and caching. Live checks were separately performed against all three public provider integrations as documented above.
+Följande tester har genomförts mot produktionsservrarna den 10–11 oktober 2026:
+
+| Leverantör | Status | Svarstid | Faktisk data | Anmärkning |
+| :--- | :--- | :--- | :--- | :--- |
+| **PTS** | HTTP 200 OK | ~1,2 s | 21 län extraherade ur `Yttäckning 2025` | Rikssnitt: 5G ~92,1 %, 100 Mbit/s ~41,8 %, 10 Mbit/s ~97,4 %. |
+| **RIPEstat** | HTTP 200 OK | ~380 ms | 60–1128 tidsseriepunkter | IPv4-prefix: ~5 725 st, IPv6-prefix: ~936 st, Routade AS: ~639 st. |
+| **IODA** | HTTP 200 OK | ~450 ms | 338 datapunkter (30-min upplösning) | Signalnivå ~1,0. Inga publicerade avbrottshändelser i testfönstret. |
+
+---
+
+## 5. Automatiserade enhetstester
+
+- `server/telecomPts.test.mjs`: Validerar uppackning av XLSX-arkiv, XML-tolkning, länsextraktion och procentnormalisering inklusive trösklar (`>99,99%`).
+- `server/telecomProviders.test.mjs`: Validerar normalisering av RIPEstat-ruttningsstatistik, IODA-tidsintervall, dedup av larm och hantering av tomma perioder.
+- `server/telecomService.test.mjs`: Testar sammanslagning av källor, skydd mot felaktig märkning av icke-svenska områden, tidsintervallvalidering samt internminnescaching.
+- `src/services/statusSummary.test.ts`: Testar statusnivåberäkning och aggregation.

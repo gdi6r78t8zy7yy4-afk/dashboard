@@ -63,8 +63,17 @@ function average(values) {
 }
 
 function aggregateRipe(results, region, now) {
-  if (results.length === 1) return results[0].result
-  const successful = results.filter(({ result }) => result.state === 'ok' || result.state === 'stale')
+  if (results.length === 1 && results[0]?.result) return results[0].result
+  const successful = results.filter(({ result }) => result && (result.state === 'ok' || result.state === 'stale'))
+  if (!successful.length) {
+    return notApplicableSource(
+      'RIPEstat / RIPE RIS',
+      'https://stat.ripe.net/docs/data-api/ripestat-data-api',
+      now,
+      'Country-specific RIPEstat queries are not enabled for this selected region.',
+      { history: [], latest: null, registeredAsns: null, routedAsns: null },
+    )
+  }
   const daily = new Map()
   for (const { country, result } of successful) {
     for (const point of result.data.history) {
@@ -116,8 +125,17 @@ function aggregateRipe(results, region, now) {
 }
 
 function aggregateIodaCountries(results, region, now) {
-  if (results.length === 1) return results[0].result
-  const successful = results.filter(({ result }) => result.state === 'ok' || result.state === 'stale' || result.state === 'unavailable')
+  if (results.length === 1 && results[0]?.result) return results[0].result
+  const successful = results.filter(({ result }) => result && (result.state === 'ok' || result.state === 'stale' || result.state === 'unavailable'))
+  if (!successful.length) {
+    return notApplicableSource(
+      'IODA',
+      'https://api.ioda.inetintel.cc.gatech.edu/v2/docs',
+      now,
+      'IODA integration is currently enabled for Sweden only.',
+      { events: [], signal: [], period: region.period, country: region.countries?.[0] ?? region.id },
+    )
+  }
   const hourly = new Map()
   const events = new Map()
   for (const { country, result } of successful) {
@@ -199,18 +217,18 @@ export async function getTelecomDashboard({ region = 'se', period = '7d', fetchI
       : Promise.all(countries.map(async (country) => ({ country, result: await adapters.ioda({ country, period, fetchImpl, now }) }))),
     (adapters.cloudflare ?? getCloudflareOutages)({ region: regionInfo, fetchImpl, now }),
   ])
+  const country = isCountry ? countries[0] : selectedRegion.toUpperCase()
   const coverage = ptsResult
     ? normalizePts(ptsResult)
     : notApplicableSource('PTS', PTS_COVERAGE_PAGE, now, 'PTS annual workbook contains Swedish administrative areas only.')
   const routing = aggregateRipe(countryRoutingResults, regionInfo, now)
-  const internetIncidents = selectedRegion === 'europe'
-    ? iodaResults[0].result
+  const internetIncidents = (selectedRegion === 'europe'
+    ? iodaResults[0]?.result
     : isCountry
-      ? iodaResults[0].result
-      : aggregateIodaCountries(iodaResults, regionInfo, now)
-  const successfulSources = [coverage, routing, internetIncidents].filter((item) => item.state === 'ok' || item.state === 'stale').length
+      ? iodaResults[0]?.result
+      : aggregateIodaCountries(iodaResults, regionInfo, now)) ?? notApplicableSource('IODA', 'https://api.ioda.inetintel.cc.gatech.edu/v2/docs', now, 'IODA integration is currently enabled for Sweden only.', { events: [], signal: [], period, country })
+  const successfulSources = [coverage, routing, internetIncidents].filter((item) => item?.state === 'ok' || item?.state === 'stale').length
   const mode = successfulSources === 3 ? 'live' : successfulSources ? 'partial' : 'no_data'
-  const country = isCountry ? countries[0] : selectedRegion.toUpperCase()
   const result = {
     country,
     region: selectedRegion,
