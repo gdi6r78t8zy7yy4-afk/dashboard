@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^node --input-type=module -e 'const url=\"https://opendata-download-metobs\\.smhi\\.se/api/version/1\\.0/parameter/1/station\\.json\"; const response=await fetch\\(url\\); const data=await response\\.json\\(\\); console\\.log\\(JSON\\.stringify\\(\\{keys:Object\\.keys\\(data\\),sample:data\\.resource\\?\\.slice\\?\\.\\(0,2\\),stockholm:data\\.resource\\?\\.filter\\?\\.\\(station=>/stockholm\\|bromma\\|norrmalm/i\\.test\\(station\\.title\\?\\?\"\"\\)\\)\\.slice\\(0,8\\)\\}\\)\\)'$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

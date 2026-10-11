@@ -53,8 +53,8 @@ export function parseIodaEvents(payloads) {
   return [...unique.values()].sort((left, right) => (right.startedAt ?? '').localeCompare(left.startedAt ?? ''))
 }
 
-export function parseIodaSignal(payload) {
-  const series = records(payload?.data).find((item) => item.entityType === 'country' && item.entityCode === 'SE')
+export function parseIodaSignal(payload, country = 'SE', entityType = 'country') {
+  const series = records(payload?.data).find((item) => item.entityType === entityType && item.entityCode === country)
   if (!series || !Array.isArray(series.values) || !Number.isFinite(Number(series.from)) || !Number.isFinite(Number(series.step))) return []
   return series.values.flatMap((raw, index) => {
     const value = Number(raw)
@@ -62,24 +62,24 @@ export function parseIodaSignal(payload) {
   })
 }
 
-/** @param {{ country?: string, period?: string, fetchImpl?: typeof fetch, now?: Date }} options */
-export async function getIodaOutages({ country = 'SE', period = '7d', fetchImpl = fetch, now = new Date() } = {}) {
+/** @param {{ country?: string, entityType?: string, period?: string, fetchImpl?: typeof fetch, now?: Date }} options */
+export async function getIodaOutages({ country = 'SE', entityType = 'country', period = '7d', fetchImpl = fetch, now = new Date() } = {}) {
   const requestedAt = new Date(now).toISOString()
   const until = Math.floor(new Date(now).getTime() / 1000)
   const from = until - periodSeconds(period)
-  const query = new URLSearchParams({ entityType: 'country', entityCode: country, from: String(from), until: String(until) })
+  const query = new URLSearchParams({ entityType, entityCode: country, from: String(from), until: String(until) })
   const eventsQuery = new URLSearchParams({ from: String(from), until: String(until) })
   const urls = [
     `${iodaBase}/outages/summary?${query}`,
     `${iodaBase}/outages/events?${query}`,
     `${iodaBase}/outages/alerts?${query}`,
-    `${iodaBase}/signals/events/country/${encodeURIComponent(country)}?${eventsQuery}`,
+    `${iodaBase}/signals/events/${encodeURIComponent(entityType)}/${encodeURIComponent(country)}?${eventsQuery}`,
   ]
   const results = await Promise.allSettled(urls.map((url) => requestJson(url, fetchImpl)))
   const successful = results.filter((result) => result.status === 'fulfilled').map((result) => result.value)
   const failures = results.filter((result) => result.status === 'rejected')
   const events = parseIodaEvents(successful.slice(0, 3))
-  const signal = parseIodaSignal(successful[3])
+  const signal = parseIodaSignal(successful[3], country, entityType)
   const observedAt = signal.at(-1)?.timestamp ?? null
   const state = successful.length === 0 ? 'error' : failures.length ? 'partial' : observedAt ? 'ok' : 'unavailable'
 
@@ -91,8 +91,8 @@ export async function getIodaOutages({ country = 'SE', period = '7d', fetchImpl 
       retrievedAt: requestedAt,
       observedAt,
       referencePeriod: `${new Date(from * 1000).toISOString()} – ${new Date(until * 1000).toISOString()}`,
-      geographicPrecision: 'country',
-      resolution: 'Country-level 30-minute internet outage indicator; outage event products are queried for the same period',
+      geographicPrecision: entityType === 'country' ? 'country' : 'multi-country',
+      resolution: `${entityType}-level internet outage signal at provider sampling interval; outage event products are queried for the same period`,
       quality: 'internet-outage-indicator',
     },
     data: { events, signal, period, country },
@@ -100,6 +100,6 @@ export async function getIodaOutages({ country = 'SE', period = '7d', fetchImpl 
       ? `Some IODA endpoints were unavailable (${failures.length} of ${urls.length}).`
       : events.length
         ? 'IODA detects internet outage signals; it does not provide complete operator status or identify failed mobile towers.'
-        : 'No IODA outage events or alerts were published for Sweden in this time window. This is not confirmation that all services were available.',
+        : `No IODA outage events or alerts were published for ${entityType} ${country} in this time window. This is not confirmation that all services were available.`,
   }
 }

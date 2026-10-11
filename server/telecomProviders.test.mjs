@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getIodaOutages, parseIodaEvents, parseIodaSignal } from './telecomIoda.mjs'
 import { getRipeRouting, parseCountryRoutingStats } from './telecomRipe.mjs'
+import { getCloudflareOutages } from './telecomCloudflare.mjs'
 
 describe('RIPEstat telecom adapter', () => {
   it('normalizes country route statistics without implying mobile availability', () => {
@@ -46,6 +47,7 @@ describe('IODA telecom adapter', () => {
       { timestamp: new Date(100000).toISOString(), value: 0 },
       { timestamp: new Date(160000).toISOString(), value: 1 },
     ])
+    expect(parseIodaSignal({ data: [{ entityType: 'country', entityCode: 'NO', from: 100, step: 300, values: [0, 2] }] }, 'NO')).toHaveLength(2)
   })
 
   it('keeps an empty IODA period distinct from healthy operator status', async () => {
@@ -57,5 +59,30 @@ describe('IODA telecom adapter', () => {
     expect(result.note).toContain('not confirmation')
     expect(fetchImpl).toHaveBeenCalledTimes(4)
     expect(fetchImpl.mock.calls.every(([input]) => String(input).includes('179'))).toBe(true)
+  })
+})
+
+describe('Cloudflare Radar adapter', () => {
+  const region = { id: 'se', period: '7d', countries: ['SE'] }
+
+  it('does not make an unauthenticated request when the token is missing', async () => {
+    const fetchImpl = vi.fn()
+    const result = await getCloudflareOutages({ region, token: '', fetchImpl, now: new Date('2026-10-10T12:00:00Z') })
+    expect(result.state).toBe('unavailable')
+    expect(result.note).toContain('Account > Radar > Read')
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('uses documented outage endpoint, Bearer auth, and preserves ASN/source details', async () => {
+    const fetchImpl = vi.fn(async (input, options) => {
+      expect(String(input)).toContain('/radar/annotations/outages?')
+      expect(String(input)).toContain('location=SE')
+      expect(options.headers.Authorization).toBe('Bearer test-token')
+      return Response.json({ success: true, result: { annotations: [{ id: 'outage-1', description: 'Network interruption', eventType: 'OUTAGE', startDate: '2026-10-10T10:00:00Z', locations: ['SE'], asns: [1257], outage: { outageCause: 'UNKNOWN', outageType: 'REGIONAL' }, linkedUrl: 'https://example.invalid/source' }] } })
+    })
+    const result = await getCloudflareOutages({ region, token: 'test-token', fetchImpl, now: new Date('2026-10-10T12:00:00Z') })
+    expect(result.state).toBe('ok')
+    expect(result.data[0]).toMatchObject({ id: 'outage-1', asns: [1257], locations: ['SE'], eventType: 'OUTAGE', linkedUrl: 'https://example.invalid/source' })
+    expect(result.provenance.observedAt).toBe('2026-10-10T10:00:00Z')
   })
 })
