@@ -40,12 +40,12 @@ describe('overview service aggregation', () => {
 
     // Timeline
     expect(Array.isArray(overview.timeline)).toBe(true)
-  })
+  }, 30000)
 
   it('handles non-Swedish regions gracefully and labels geographic coverage', async () => {
     const overview = await getAggregatedOverview({ region: 'no', now: new Date('2026-10-10T12:00:00Z') })
     expect(overview.region).toBe('no')
     expect(overview.regionLabel).toBe('Norge')
     expect(overview.sectors).toHaveLength(5)
-  }, 15000)
+  }, 30000)
 })

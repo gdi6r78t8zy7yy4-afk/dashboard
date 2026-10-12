@@ -8,6 +8,7 @@ import { getTelecomDashboard } from './server/telecomService.mjs'
 import { getInternetDashboard } from './server/internetService.mjs'
 import { getCyberDashboard, getCyberCveDetails } from './server/cyberService.mjs'
 import { getEventsDashboard } from './server/eventsService.mjs'
+import { getTransportDashboard } from './server/transportService.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -107,6 +108,17 @@ async function startServer() {
       res.json(await getEventsDashboard({ sector, region, classification, severity, search, grouped, forceRefresh }))
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : 'Kunde inte hämta omvärldshändelser.' })
+    }
+  })
+
+  app.get('/api/v1/transport', async (req: Request, res: Response) => {
+    const mode = typeof req.query.mode === 'string' ? req.query.mode : 'all'
+    const region = typeof req.query.region === 'string' ? req.query.region : 'se'
+    const period = typeof req.query.period === 'string' ? req.query.period : '24h'
+    try {
+      res.json(await getTransportDashboard({ mode, region, period }))
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Kunde inte hämta transportdata.' })
     }
   })
 

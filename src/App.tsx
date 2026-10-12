@@ -35,6 +35,7 @@ const TelecomDashboard = lazy(() => import('./TelecomDashboard'))
 const InternetDashboard = lazy(() => import('./InternetDashboard'))
 const CyberDashboard = lazy(() => import('./CyberDashboard'))
 const WorldEventsDashboard = lazy(() => import('./WorldEventsDashboard'))
+const TransportDashboard = lazy(() => import('./TransportDashboard'))
 
 type DashboardId =
   | 'overview'
@@ -976,9 +977,24 @@ function App() {
               <WorldEventsDashboard initialRegion={activeRegion} />
             </Suspense>
           )}
+          {activeDashboard === 'roads' && (
+            <Suspense fallback={<p className="data-message" role="status">Laddar vägtrafikdata från Trafikverket…</p>}>
+              <TransportDashboard initialMode="road" region={activeRegion} />
+            </Suspense>
+          )}
+          {activeDashboard === 'rail' && (
+            <Suspense fallback={<p className="data-message" role="status">Laddar järnvägstrafik från Trafikverket…</p>}>
+              <TransportDashboard initialMode="rail" region={activeRegion} />
+            </Suspense>
+          )}
+          {activeDashboard === 'aviation' && (
+            <Suspense fallback={<p className="data-message" role="status">Laddar flygdata från OpenSky Network…</p>}>
+              <TransportDashboard initialMode="aviation" region={activeRegion} />
+            </Suspense>
+          )}
 
           {/* Sector panel if sub-dashboard opened without dedicated interactive view */}
-          {activeDashboard !== 'overview' && activeDashboard !== 'events' && activeDashboard !== 'power' && activeDashboard !== 'telecom' && activeDashboard !== 'networks' && activeDashboard !== 'cyber' && sectorData && (
+          {activeDashboard !== 'overview' && activeDashboard !== 'events' && activeDashboard !== 'power' && activeDashboard !== 'telecom' && activeDashboard !== 'networks' && activeDashboard !== 'cyber' && activeDashboard !== 'roads' && activeDashboard !== 'rail' && activeDashboard !== 'aviation' && sectorData && (
             <section className="sector-panel" aria-live="polite">
               <div className="sector-panel-header">
                 <div>

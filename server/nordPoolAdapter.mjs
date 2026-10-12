@@ -1,4 +1,4 @@
-import { XMLParser } from 'fast-xml-parser'
+import { XMLParser, XMLValidator } from 'fast-xml-parser'
 
 const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false, trimValues: true })
 
@@ -21,7 +21,7 @@ function field(value, key) {
 
 function parseNordPoolXml(xml) {
   try {
-    const validation = XMLParser.validate(xml)
+    const validation = XMLValidator.validate(xml)
     if (validation !== true) throw new Error('Nord Pool returned invalid XML.')
     
     const document = parser.parse(xml).Response
