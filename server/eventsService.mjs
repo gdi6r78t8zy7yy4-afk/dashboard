@@ -134,12 +134,14 @@ export async function getEventsDashboard({
 
     // Region filter
     if (region !== 'all') {
-      if (region === 'SE' && entry.region !== 'SE') return false
-      if (region === 'nordics' && entry.region !== 'SE' && entry.region !== 'nordics') return false
-      if (region === 'europe' && entry.region !== 'SE' && entry.region !== 'nordics' && entry.region !== 'europe') {
+      // Convert region to lowercase for consistent comparison
+      const lowerRegion = region.toLowerCase();
+      if (lowerRegion === 'se' && entry.region !== 'SE') return false
+      if (lowerRegion === 'nordics' && entry.region !== 'SE' && entry.region !== 'nordics') return false
+      if (lowerRegion === 'europe' && entry.region !== 'SE' && entry.region !== 'nordics' && entry.region !== 'europe') {
         return false
       }
-      if (region === 'global' && entry.region !== 'global') {
+      if (lowerRegion === 'global' && entry.region !== 'global') {
         // keep global
       }
     }

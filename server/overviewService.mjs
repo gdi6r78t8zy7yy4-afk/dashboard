@@ -48,12 +48,7 @@ function deduplicateIncidents(incidents) {
   return result
 }
 
-function calculateSectorStatus(severityLevel) {
-  if (severityLevel >= 4) return 'critical'
-  if (severityLevel === 3) return 'elevated'
-  if (severityLevel === 1) return 'operational'
-  return 'unknown'
-}
+
 
 /**
  * Aggregates all data sources into a comprehensive situational awareness model.
