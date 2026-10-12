@@ -12,9 +12,14 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty",
     "lint": "tsc -b --pretty",
-    "test": "vitest run"
+    "test": "vitest run",
+    "llm:test": "node scripts/test-llm-connection.js",
+    "verify-data": "node scripts/verify-data.js",
+    "test-apis": "node scripts/test-apis.js",
+    "test-nordpool": "node scripts/test-nordpool.js"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.67",
     "express": "^5.3.0",
     "fast-xml-parser": "^5.11.2",
     "fflate": "^0.8.3",
@@ -29,7 +34,6 @@
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
-    
     "tsx": "^4.23.15",
     "typescript": "~5.9.3",
     "vite": "^7.1.7",

@@ -8,8 +8,17 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  ComposedChart,
+  ScatterChart,
+  Scatter,
+  ReferenceLine,
+  LabelList
 } from 'recharts'
-import { ArrowUpRight, CloudSun, Info, Zap } from 'lucide-react'
+import { ArrowUpRight, CloudSun, Info, Zap, TrendingUp, TrendingDown, Activity, Gauge } from 'lucide-react'
 
 type Point = { timestamp: string; value: number; category: string | null; quality?: string | null }
 type Dataset = { status: string; dataType: string; unit: string; points: Point[]; lastUpdated: string | null; note: string | null }
@@ -102,6 +111,7 @@ type EnergyResponse = {
     smhi: { status: string; label: string }
     svkNotices: { status: string; label: string; url: string; note: string; endpoint?: string }
     smhiForecast: { status: string; label: string; note: string }
+    nordpool?: { status: string; label: string; endpoint: string; lastUpdated: string | null; note?: string }
   }
   datasets: {
     dayAheadPrices: Dataset
@@ -115,6 +125,7 @@ type EnergyResponse = {
   weather: WeatherObservation[]
   gridDisturbances: { status: string; value: null; note: string }
   retrievedAt: string
+  nordpool?: Record<string, any> | null
 }
 
 const countryOptions = [
@@ -162,17 +173,120 @@ function latestByCategory(points: Point[]) {
   return [...byCategory.entries()].map(([category, point]) => ({ ...point, category }))
 }
 
-function makeChartRows(series: { name: string; points: Point[] }[]) {
-  const rows = new Map<string, Record<string, string | number>>()
-  const available = series.filter((item) => item.points.length > 0)
-  for (const item of available) {
-    for (const point of item.points) {
-      const row = rows.get(point.timestamp) ?? { timestamp: point.timestamp }
-      row[item.name] = point.value
-      rows.set(point.timestamp, row)
+function PriceChart({
+  title,
+  description,
+  unit,
+  series,
+  timezone,
+  emptyStatus,
+  emptyNote,
+  area,
+  period,
+  nordpoolData
+}: {
+  title: string
+  description: string
+  unit: string
+  series: { name: string; points: Point[] }[]
+  timezone: string
+  emptyStatus?: string
+  emptyNote?: string | null
+  area: string
+  period: string
+  nordpoolData?: Record<string, any> | null
+}) {
+  const chart = makeChartRows(series)
+  
+  // Get Nord Pool data if available
+  const nordpoolSeries = [];
+  if (nordpoolData && nordpoolData[area]) {
+    const nordpool = nordpoolData[area];
+    if (nordpool && nordpool.data && nordpool.data.length > 0) {
+      const points = nordpool.data.map((point: any) => ({
+        timestamp: point.timestamp,
+        value: point.value
+      }));
+      nordpoolSeries.push({ name: 'Nord Pool Price', points });
     }
   }
-  return { rows: [...rows.values()].sort((left, right) => String(left.timestamp).localeCompare(String(right.timestamp))), series: available }
+
+  // Combine with existing series if available
+  const allSeries = [...series, ...nordpoolSeries];
+  
+  return (
+    <article className="panel energy-chart-panel">
+      <div className="panel-heading">
+        <div><div className="section-kicker">{description}</div><h2>{title}</h2></div>
+        <span className="energy-unit">{unit}</span>
+      </div>
+      {chart.rows.length === 0 ? (
+        <div className="energy-chart-empty"><Status value={emptyStatus ?? 'missing'} /><span>{emptyNote ?? 'No published series for this area and period.'}</span></div>
+      ) : (
+        <div className="energy-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chart.rows} margin={{ top: 10, right: 12, bottom: 2, left: 0 }}>
+              <CartesianGrid stroke="#edf0eb" strokeDasharray="3 4" vertical={false} />
+              <XAxis 
+                dataKey="timestamp" 
+                tickFormatter={(value) => formatTime(String(value), timezone).replace(/,\s*/, ' ')} 
+                minTickGap={26} 
+                tick={{ fill: '#899188', fontSize: 9 }} 
+                axisLine={false} 
+                tickLine={false} 
+              />
+              <YAxis width={48} tick={{ fill: '#899188', fontSize: 9 }} axisLine={false} tickLine={false} />
+              <Tooltip
+                labelFormatter={(value) => formatTime(String(value), timezone)}
+                formatter={(value) => [`${Number(value).toLocaleString('en-GB')} ${unit}`]}
+                contentStyle={{ borderColor: '#e2e8e1', borderRadius: 6, fontSize: 10 }}
+              />
+              {allSeries.length > 1 && <Legend wrapperStyle={{ fontSize: 9 }} />}
+              {allSeries.map((item, index) => (
+                <Area
+                  key={item.name}
+                  type="monotone"
+                  dataKey={item.name}
+                  stroke={chartColors[index % chartColors.length]}
+                  strokeWidth={2}
+                  fill={chartColors[index % chartColors.length] + '33'}
+                  dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+              ))}
+              {allSeries.length > 0 && (
+                <ReferenceLine 
+                  y={allSeries[0].points.length > 0 ? allSeries[0].points.reduce((sum, p) => sum + p.value, 0) / allSeries[0].points.length : 0}
+                  stroke="#899188"
+                  strokeDasharray="3 3"
+                  strokeWidth={1}
+                >
+                  <LabelList position="right" value="Avg" />
+                </ReferenceLine>
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </article>
+  )
+}
+
+// Helper function to calculate statistics
+function calculatePriceStats(points: Point[]) {
+  if (!points || points.length === 0) return null;
+  
+  const values = points.map(p => p.value).filter(v => v !== undefined && v !== null);
+  if (values.length === 0) return null;
+  
+  const sorted = [...values].sort((a, b) => a - b);
+  return {
+    min: sorted[0],
+    max: sorted[sorted.length - 1],
+    avg: values.reduce((sum, val) => sum + val, 0) / values.length,
+    count: values.length
+  };
 }
 
 function Status({ value }: { value: string }) {
@@ -304,6 +418,15 @@ function EnergyDashboard() {
     exportUnit: flow.export.unit,
   })) ?? []
   const timezone = data?.market.timezone ?? 'Europe/Stockholm'
+  
+  // Calculate price statistics if available
+  const priceStats = price ? calculatePriceStats(price.points) : null;
+  
+  // Check if Nord Pool data is available for current zone
+  const hasNordPoolData = data?.nordpool && data.nordpool[zone] && data.nordpool[zone].data?.length > 0;
+  
+  // Calculate price statistics if available
+  const priceStats = price ? calculatePriceStats(price.points) : null;
 
   return (
     <section className="energy-dashboard" aria-label="Electricity market and system data">
@@ -395,11 +518,125 @@ function EnergyDashboard() {
             </article>
           </div>
 
+          {/* Enhanced Price Visualization */}
           <div className="energy-chart-grid">
-            <EnergyChart title="Day-ahead prices" description="MARKET PRICE · NOT GRID STABILITY" unit={price?.unit ?? 'EUR/MWh'} series={[{ name: 'Day-ahead', points: price?.points ?? [] }]} timezone={timezone} emptyStatus={price?.status} emptyNote={price?.note} />
+            <PriceChart 
+              title="Day-ahead prices" 
+              description="MARKET PRICE · NOT GRID STABILITY" 
+              unit={price?.unit ?? 'EUR/MWh'} 
+              series={[{ name: 'Day-ahead', points: price?.points ?? [] }]} 
+              timezone={timezone} 
+              emptyStatus={price?.status} 
+              emptyNote={price?.note}
+              area={zone}
+              period={period}
+              nordpoolData={data.nordpool}
+            />
+            
             <EnergyChart title="Generation by production type" description="ACTUAL AND FORECAST VALUES ARE SEPARATE SERIES" unit={actualGeneration?.unit ?? 'MW'} series={generationSeries} timezone={timezone} emptyStatus={actualGeneration?.status} emptyNote={actualGeneration?.note} />
             <EnergyChart title="Consumption and load" description="MEASURED LOAD VS FORECAST" unit={actualLoad?.unit ?? 'MW'} series={loadSeries} timezone={timezone} emptyStatus={actualLoad?.status} emptyNote={actualLoad?.note} />
             <EnergyChart title="Inter-area imports and exports" description="MEASURED CROSS-BORDER FLOWS" unit={data.datasets.crossBorderFlows[0]?.import.unit ?? 'MW'} series={flowSeries} timezone={timezone} emptyStatus={data.datasets.crossBorderFlows[0]?.import.status} emptyNote={data.datasets.crossBorderFlows[0]?.import.note} />
+          </div>
+
+          {/* New Enhanced Charts Section */}
+          <div className="energy-charts-section">
+            <h3>Price Statistics & Forecast</h3>
+            {priceStats && (
+              <div className="energy-price-stats">
+                <div className="price-stat-card">
+                  <TrendingUp size={16} />
+                  <div>
+                    <span className="stat-label">Lowest Price</span>
+                    <strong>{priceStats.min?.toFixed(2)} {price?.unit}</strong>
+                  </div>
+                </div>
+                <div className="price-stat-card">
+                  <TrendingDown size={16} />
+                  <div>
+                    <span className="stat-label">Highest Price</span>
+                    <strong>{priceStats.max?.toFixed(2)} {price?.unit}</strong>
+                  </div>
+                </div>
+                <div className="price-stat-card">
+                  <Gauge size={16} />
+                  <div>
+                    <span className="stat-label">Average Price</span>
+                    <strong>{priceStats.avg?.toFixed(2)} {price?.unit}</strong>
+                  </div>
+                </div>
+                <div className="price-stat-card">
+                  <Activity size={16} />
+                  <div>
+                    <span className="stat-label">Data Points</span>
+                    <strong>{priceStats.count}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Production Mix Chart */}
+            {actualGeneration && actualGeneration.points.length > 0 && (
+              <div className="energy-production-mix">
+                <h3>Production Mix</h3>
+                <div className="energy-chart">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={generationCategories.map(cat => ({ name: cat.category || 'Unknown', value: cat.value }))} margin={{ top: 10, right: 12, bottom: 2, left: 0 }}>
+                      <CartesianGrid stroke="#edf0eb" strokeDasharray="3 4" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: '#899188', fontSize: 9 }} axisLine={false} tickLine={false} />
+                      <YAxis width={48} tick={{ fill: '#899188', fontSize: 9 }} axisLine={false} tickLine={false} />
+                      <Tooltip 
+                        formatter={(value) => [`${Number(value).toLocaleString('en-GB')} ${actualGeneration.unit}`]}
+                        contentStyle={{ borderColor: '#e2e8e1', borderRadius: 6, fontSize: 10 }}
+                      />
+                      <Bar dataKey="value" fill="#387c65" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+            
+            {/* Nord Pool Price Comparison */}
+            {hasNordPoolData && (
+              <div className="energy-production-mix">
+                <h3>Nord Pool Price Comparison</h3>
+                <div className="energy-chart">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart 
+                      data={(data?.nordpool?.[zone]?.data || []).map((point: any) => ({
+                        timestamp: point.timestamp,
+                        value: point.value
+                      }))} 
+                      margin={{ top: 10, right: 12, bottom: 2, left: 0 }}
+                    >
+                      <CartesianGrid stroke="#edf0eb" strokeDasharray="3 4" vertical={false} />
+                      <XAxis 
+                        dataKey="timestamp" 
+                        tickFormatter={(value) => formatTime(String(value), timezone).replace(/,\s*/, ' ')} 
+                        minTickGap={26} 
+                        tick={{ fill: '#899188', fontSize: 9 }} 
+                        axisLine={false} 
+                        tickLine={false} 
+                      />
+                      <YAxis width={48} tick={{ fill: '#899188', fontSize: 9 }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        labelFormatter={(value) => formatTime(String(value), timezone)}
+                        formatter={(value) => [`${Number(value).toLocaleString('en-GB')} ${price?.unit}`]}
+                        contentStyle={{ borderColor: '#e2e8e1', borderRadius: 6, fontSize: 10 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="value" 
+                        stroke="#c8893d" 
+                        strokeWidth={2} 
+                        dot={false} 
+                        connectNulls={false} 
+                        isAnimationActive={false} 
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="energy-detail-grid">
@@ -578,10 +815,16 @@ function EnergyDashboard() {
               )}
               <div className="energy-source-row"><span>{data.sources.entsoe.label}</span><Status value={data.sources.entsoe.status} /></div>
               <div className="energy-source-row"><span>{data.sources.smhi.label}</span><Status value={data.sources.smhi.status} /></div>
+              {data.sources.nordpool && (
+                <div className="energy-source-row"><span>{data.sources.nordpool.label}</span><Status value={data.sources.nordpool.status} /></div>
+              )}
               <div className="energy-source-row"><span>Latest ENTSO-E data</span><strong>{formatTime(data.sources.entsoe.lastUpdated)}</strong></div>
               <div className="energy-source-row"><span>Retrieved from backend</span><strong>{formatTime(data.retrievedAt)}</strong></div>
               <a className="source-link" href="https://data.svk.se" target="_blank" rel="noreferrer">Svenska kraftnät Dataportal (data.svk.se) <ArrowUpRight size={14} /></a>
               <a className="source-link" href="https://transparency.entsoe.eu/" target="_blank" rel="noreferrer">ENTSO-E Transparency Platform <ArrowUpRight size={14} /></a>
+              {data.sources.nordpool && (
+                <a className="source-link" href={data.sources.nordpool.endpoint} target="_blank" rel="noreferrer">Nord Pool Market Data API <ArrowUpRight size={14} /></a>
+              )}
             </article>
           </div>
         </>

@@ -6,6 +6,7 @@ A modular situational-awareness dashboard framework for critical infrastructure 
 
 - Node.js 20.19+ or 22.12+
 - npm
+- LM Studio (for local LLM functionality)
 
 ## Getting started
 
@@ -14,7 +15,34 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. `npm run dev` starts both the frontend and backend API and loads `.env` if present. The overview and other sector dashboards use clearly marked demo data. The Electricity grid dashboard has its own country, bidding-zone, and period controls. Copy `.env.example` to `.env` and set `ENTSOE_API_TOKEN` on the server to enable ENTSO-E queries; the token is never exposed to the browser. Without a token, ENTSO-E values stay explicitly unconfigured.
+Open the local URL printed by Vite. `npm run dev` starts both the frontend and backend API and loads `.env` if present. The overview and other sector dashboards use clearly marked demo data. The Electricity grid dashboard has its own country, bidding-zone, and period controls. 
+
+Copy `.env.example` to `.env` and configure your API keys for real data:
+```bash
+cp .env.example .env
+```
+
+The following API keys are already configured in your `.env` file:
+
+
+The tokens are never exposed to the browser. Without a token, ENTSO-E values stay explicitly unconfigured.
+
+## Local LLM Setup
+
+This project is configured to work with a local LLM running in LM Studio. To use this functionality:
+
+1. Ensure LM Studio is installed and running
+2. Make sure your model is available at the default URL: `http://127.0.0.1:1234/v1`
+3. Your configured model should be named `qwen/qwen3-coder-30b`
+
+The application uses the `@ai-sdk/openai-compatible` package to interface with your local LLM. The configuration is already set up in `opencode.json`.
+
+To test if your LM Studio connection works:
+```bash
+npm run dev
+# Then in another terminal:
+node -e "import('./src/utils/llm-checker.js').then(m => m.checkLMStudioStatus())"
+```
 
 ## Scripts
 

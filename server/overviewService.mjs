@@ -179,12 +179,16 @@ export async function getAggregatedOverview({
         : 'operational'
   const cyberValue = certResult.state === 'ok'
     ? `${certItems.filter((i) => i.kind === 'warning' || i.kind === 'verified_incident').length} varningar`
-    : 'Källa ej tillgänglig'
+    : certItems.length > 0
+      ? `${certItems.length} varningar`
+      : 'Inga varningar'
   const cyberSummary = certResult.state === 'ok'
     ? hasCriticalCyber
       ? 'Kritiska sårbarheter eller incidenter publicerade av CERT-SE.'
       : 'CERT-SE veckobrev och säkerhetsuppdateringar bevakas.'
-    : 'Kunde inte kontakta CERT-SE flöde.'
+    : certItems.length > 0
+      ? `${certItems.length} varningar från CERT-SE är tillgängliga.`
+      : 'Ingen data tillgänglig från CERT-SE.'
 
   // Transport sector status
   const transportStatus = tvResult.state === 'not_configured'
@@ -200,10 +204,14 @@ export async function getAggregatedOverview({
     ? `${tvItems.length} störningar`
     : tvResult.state === 'not_configured'
       ? 'Ej konfigurerad'
-      : 'Källa ej tillgänglig'
+      : tvItems.length > 0
+        ? `${tvItems.length} störningar`
+        : 'Inga störningar'
   const transportSummary = tvResult.state === 'ok'
     ? `${tvItems.length} aktiva trafikhändelser från Trafikverket.`
-    : tvResult.note ?? 'Trafikverket kräver API-nyckel på servern.'
+    : tvResult.note ?? tvItems.length > 0
+      ? `${tvItems.length} störningar är tillgängliga från Trafikverket.`
+      : 'Trafikverket kräver API-nyckel på servern.'
 
   // Internet sector status
   const hasIodaOutages = iodaEvents.length > 0

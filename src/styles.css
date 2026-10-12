@@ -344,6 +344,104 @@ h2 { margin: 0; color: #28312b; font-size: 14px; font-weight: 600; }
 .source-status-row small { color: #7e867f; font-size: 8px; }
 .source-status-meta { display: grid; justify-items: end; gap: 5px; }
 
+/* Energy dashboard enhancements */
+.energy-charts-section {
+  margin-top: 24px;
+  padding: 0 16px 24px;
+}
+
+.energy-charts-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.energy-price-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.price-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8faf7;
+  border: 1px solid var(--line);
+}
+
+.price-stat-card svg {
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+.price-stat-card .stat-label {
+  display: block;
+  font-size: 10px;
+  color: #858b84;
+}
+
+.price-stat-card strong {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.energy-production-mix {
+  margin-top: 24px;
+}
+
+.energy-production-mix h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.energy-chart {
+  height: 200px;
+  margin-bottom: 16px;
+}
+
+/* Chart enhancements */
+.energy-chart-panel {
+  margin-bottom: 24px;
+}
+
+.energy-chart-panel .panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.energy-chart-panel .energy-unit {
+  font-size: 12px;
+  color: #858b84;
+  background: #f0f2ee;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.energy-chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 180px;
+  color: #858b84;
+  text-align: center;
+}
+
+.energy-chart-empty strong {
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
 @media (min-width: 1550px) {
   .dashboard-content { padding-top: 42px; }
   .service-card { min-height: 174px; padding: 15px 16px 11px; }

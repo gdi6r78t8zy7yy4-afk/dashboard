@@ -1,5 +1,6 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
 import { getSvkEnergyData } from './svkAdapter.mjs'
+import { getNordPoolDayAheadPricesForAllAreas } from './nordpoolAdapter.mjs'
 
 const areas = {
   se: {
@@ -298,7 +299,16 @@ export async function getEnergyData({ country = 'se', zone, period = '24h', fetc
     ? getSvkEnergyData({ zone: area.zone, fetchImpl }).catch(() => null)
     : Promise.resolve(null)
 
-  const [dayAheadPrices, actualGeneration, generationForecast, actualLoad, loadForecast, rawCrossBorderFlows, svkData] = await Promise.all([
+  // Nord Pool Market Data API for day-ahead prices (Swedish areas only)
+  const nordpoolPromise = country === 'se'
+    ? getNordPoolDayAheadPricesForAllAreas({ 
+        period, 
+        fetchImpl, 
+        token: process.env.NORDPOOL_API_TOKEN 
+      }).catch(() => ({}))
+    : Promise.resolve({})
+
+  const [dayAheadPrices, actualGeneration, generationForecast, actualLoad, loadForecast, rawCrossBorderFlows, svkData, nordpoolData] = await Promise.all([
     queries.dayAheadPrices,
     queries.actualGeneration,
     queries.generationForecast,
@@ -306,6 +316,7 @@ export async function getEnergyData({ country = 'se', zone, period = '24h', fetc
     queries.loadForecast,
     Promise.all(flows),
     svkPromise,
+    nordpoolPromise,
   ])
 
   // If ENTSO-E flows are not configured and Svenska kraftnät has real physical flows, enrich crossBorderFlows!
@@ -353,8 +364,16 @@ export async function getEnergyData({ country = 'se', zone, period = '24h', fetc
   const entsoeStatus = !token ? 'not_configured' : hasEntsoeValues && hasEntsoeErrors ? 'partial' : hasEntsoeValues ? 'ok' : hasEntsoeErrors ? 'error' : 'missing'
   const smhiStatus = country !== 'se' ? 'not_applicable' : weather.some((item) => item.status === 'ok') ? 'ok' : weather.some((item) => item.status === 'stale') ? 'stale' : weather.some((item) => item.status === 'error') ? 'error' : 'unavailable'
   const svkStatus = svkData ? svkData.status : (country === 'se' ? 'error' : 'not_applicable')
-
-  const hasLiveValues = hasEntsoeValues || (svkData && svkData.status === 'ok')
+  
+  // Determine Nord Pool status
+  const nordpoolStatus = country === 'se' ? 
+    (Object.values(nordpoolData).some(data => data.state === 'ok') ? 'ok' : 
+     Object.values(nordpoolData).some(data => data.state === 'not_configured') ? 'not_configured' : 
+     Object.values(nordpoolData).some(data => data.state === 'error') ? 'error' : 
+     'unavailable') : 
+    'not_applicable'
+  
+  const hasLiveValues = hasEntsoeValues || (svkData && svkData.status === 'ok') || (nordpoolStatus === 'ok')
 
   return {
     mode: hasLiveValues ? 'live' : 'partial',
@@ -382,11 +401,19 @@ export async function getEnergyData({ country = 'se', zone, period = '24h', fetc
           : noticesUnavailableNote,
       },
       smhiForecast: { status: 'not_configured', label: 'SMHI forecasts', note: forecastUnavailableNote },
+      nordpool: {
+        status: nordpoolStatus,
+        label: 'Nord Pool Market Data API',
+        endpoint: 'https://api.nordpoolgroup.com',
+        url: 'https://developers.nordpoolgroup.com/reference/marketdata-introduction',
+        note: 'Day-ahead prices for Nordic markets. Requires API access token.',
+      },
     },
     datasets: { dayAheadPrices, actualGeneration, generationForecast, actualLoad, loadForecast, crossBorderFlows },
     svk: svkData,
     weather,
     gridDisturbances: { status: 'not_configured', value: null, note: 'Market prices and weather observations are not evidence of a grid disturbance. No verified public disturbance feed is connected.' },
     retrievedAt: new Date(now).toISOString(),
+    nordpool: nordpoolData,
   }
 }
