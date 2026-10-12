@@ -213,6 +213,19 @@ h2 { margin: 0; color: #28312b; font-size: 14px; font-weight: 600; }
 .energy-flow-row b { display: block; margin-top: 3px; color: #4b574e; font-size: 9px; font-weight: 600; }
 .energy-flow-note { display: block; margin-top: 9px; color: #969c95; font-size: 8px; line-height: 1.5; }
 .energy-status.partial { background: #f8f1e5; color: #a67637; }
+.energy-svk-panel { grid-column: 1 / -1; display: grid; gap: 12px; border: 1px solid #d4dfd7; background: #fafcfb; border-radius: 7px; padding: 14px 16px; }
+.energy-svk-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.energy-svk-title h2 { font-size: 13px; font-weight: 700; color: #1e352b; display: flex; align-items: center; gap: 6px; }
+.energy-svk-endpoint-pill { display: inline-flex; align-items: center; gap: 5px; font-family: monospace; font-size: 9px; padding: 3px 8px; border-radius: 4px; background: #eaf1ed; color: #285440; border: 1px solid #d0e0d6; }
+.energy-svk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.energy-svk-card { display: grid; gap: 6px; padding: 10px 12px; background: #ffffff; border: 1px solid #e2e8e3; border-radius: 6px; }
+.energy-svk-card-title { font-size: 10px; font-weight: 700; color: #3b4c41; display: flex; justify-content: space-between; align-items: center; }
+.energy-svk-card-sub { font-size: 8px; color: #78857a; }
+.energy-svk-stat-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; border-top: 1px dashed #edf1ee; font-size: 9px; }
+.energy-svk-stat-val { font-weight: 700; color: #1c2e24; }
+.energy-svk-badge-up { color: #27794e; background: #eaf6ee; padding: 1px 5px; border-radius: 3px; font-size: 8px; font-weight: 600; }
+.energy-svk-badge-down { color: #8e5520; background: #fdf5ea; padding: 1px 5px; border-radius: 3px; font-size: 8px; font-weight: 600; }
+
 
 .telecom-dashboard { display: grid; gap: 12px; margin-top: 18px; }
 .telecom-header-panel { display: grid; gap: 10px; border: 1px solid #e6e9e3; border-radius: 7px; background: #fff; padding: 15px 17px; }

@@ -60,7 +60,7 @@ describe('energy data adapter', () => {
 
   it('keeps ENTSO-E products explicitly unconfigured without a server token', async () => {
     const fetchImpl = vi.fn(async () => { throw new Error('Unexpected network request') })
-    const result = await getEnergyData({ country: 'se', zone: 'SE3', period: '24h', token: '', fetchImpl, now: new Date('2026-10-10T12:00:00Z') })
+    const result = await getEnergyData({ country: 'se', zone: 'SE3', period: '24h', token: '', fetchImpl, now: new Date('2026-10-10T12:00:00Z'), enableSvk: false })
     expect(result.mode).toBe('partial')
     expect(result.sources.entsoe.status).toBe('not_configured')
     expect(result.datasets.dayAheadPrices.status).toBe('not_configured')
@@ -80,12 +80,91 @@ describe('energy data adapter', () => {
       }
       return new Response(JSON.stringify({ value: [{ date: 1791637200000, value: '12.5', quality: 'G' }] }), { status: 200 })
     })
-    const result = await getEnergyData({ country: 'se', zone: 'SE3', token: '', fetchImpl, now: new Date('2026-10-10T12:00:00Z') })
+    const result = await getEnergyData({ country: 'se', zone: 'SE3', token: '', fetchImpl, now: new Date('2026-10-10T12:00:00Z'), enableSvk: false })
     expect(result.weather.map((item) => item.status)).toEqual(['ok', 'ok', 'ok'])
     expect(result.weather[0].station).toBe('Active nearby station')
     expect(result.weather[0].points[0]).toMatchObject({ value: 12.5, quality: 'G' })
     expect(result.sources.smhi.status).toBe('ok')
     expect(result.datasets.dayAheadPrices.status).toBe('not_configured')
     expect(fetchImpl).toHaveBeenCalledTimes(6)
+  })
+
+  it('integrates Svenska kraftnät CKAN API data (data.svk.se) into sources and flows', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const urlStr = String(url)
+      if (urlStr.includes('status_show')) {
+        return new Response(JSON.stringify({
+          success: true,
+          result: { site_title: 'Svenska Kraftnät Data Service', site_url: 'https://data.svk.se', ckan_version: '2.11.6' },
+        }), { status: 200 })
+      }
+      if (urlStr.includes('4aa94b88-9f42-4f0a-a6a8-8e47aadc782a')) {
+        // Physical flows
+        return new Response(JSON.stringify({
+          success: true,
+          result: {
+            records: [
+              {
+                from_bidding_zone: 'SE3',
+                to_bidding_zone: 'SE4',
+                power: 1850.5,
+                power_unit: 'MW',
+                start_time_sweden: '2026-10-12T11:00:00',
+                start_time_utc: '2026-10-12T09:00:00',
+              },
+            ],
+          },
+        }), { status: 200 })
+      }
+      if (urlStr.includes('0c56e30d-8fce-4c27-afc8-621c230ae34d')) {
+        // mFRR
+        return new Response(JSON.stringify({
+          success: true,
+          result: {
+            records: [
+              {
+                bidding_zone: 'SE3',
+                reserve_direction: 'up',
+                price: 15,
+                price_unit: 'EUR-MW',
+                volume: 450,
+                volume_unit: 'MW',
+                start_time_sweden: '2026-10-12T23:00:00',
+                start_time_utc: '2026-10-12T21:00:00',
+              },
+            ],
+          },
+        }), { status: 200 })
+      }
+      if (urlStr.includes('6351d2cc-1657-43eb-b112-b8408c700529')) {
+        // aFRR
+        return new Response(JSON.stringify({
+          success: true,
+          result: {
+            records: [],
+          },
+        }), { status: 200 })
+      }
+      // Weather mock
+      if (urlStr.includes('station.json')) {
+        return new Response(JSON.stringify({ station: [{ key: 's1', latitude: 59.33, longitude: 18.06, active: true }] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ value: [{ date: 1791637200000, value: '10.0' }] }), { status: 200 })
+    })
+
+    const result = await getEnergyData({ country: 'se', zone: 'SE3', token: '', fetchImpl, now: new Date('2026-10-10T12:00:00Z') })
+    expect(result.mode).toBe('live')
+    expect(result.sources.svk.status).toBe('ok')
+    expect(result.sources.svk.endpoint).toBe('https://data.svk.se/sv/api/3/action/')
+    expect(result.sources.svk.siteTitle).toBe('Svenska Kraftnät Data Service')
+    expect(result.svk).toBeDefined()
+    expect(result.svk.reserves.mfrr.latest.latestUp.volume).toBe(450)
+
+    // Check that crossBorderFlows for SE4 was populated from Svenska kraftnät
+    const se4Flow = result.datasets.crossBorderFlows.find((f) => f.neighbor === 'SE4')
+    expect(se4Flow).toBeDefined()
+    expect(se4Flow.export.status).toBe('ok')
+    expect(se4Flow.export.unit).toBe('MW')
+    expect(se4Flow.export.points[0].value).toBe(1850.5)
   })
 })

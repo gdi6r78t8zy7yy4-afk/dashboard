@@ -1,4 +1,5 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
+import { getSvkEnergyData } from './svkAdapter.mjs'
 
 const areas = {
   se: {
@@ -269,8 +270,8 @@ async function fetchWeatherObservation(parameter, label, unit, coordinates, fetc
   }
 }
 
-/** @param {{ country?: string, zone?: string, period?: string, fetchImpl?: typeof fetch, token?: string, now?: Date }} options */
-export async function getEnergyData({ country = 'se', zone, period = '24h', fetchImpl = fetch, token = process.env.ENTSOE_API_TOKEN, now = new Date() } = {}) {
+/** @param {{ country?: string, zone?: string, period?: string, fetchImpl?: typeof fetch, token?: string, now?: Date, enableSvk?: boolean }} options */
+export async function getEnergyData({ country = 'se', zone, period = '24h', fetchImpl = fetch, token = process.env.ENTSOE_API_TOKEN, now = new Date(), enableSvk = true } = {}) {
   const area = getEnergyArea(country, zone)
   const interval = intervalFor(period, now)
   const zoneEic = area.eic
@@ -292,14 +293,51 @@ export async function getEnergyData({ country = 'se', zone, period = '24h', fetc
     return { neighbor, export: exportFlow, import: importFlow }
   })
 
-  const [dayAheadPrices, actualGeneration, generationForecast, actualLoad, loadForecast, crossBorderFlows] = await Promise.all([
+  // Svenska kraftnät CKAN API query for Swedish bidding zones
+  const svkPromise = country === 'se' && enableSvk
+    ? getSvkEnergyData({ zone: area.zone, fetchImpl }).catch(() => null)
+    : Promise.resolve(null)
+
+  const [dayAheadPrices, actualGeneration, generationForecast, actualLoad, loadForecast, rawCrossBorderFlows, svkData] = await Promise.all([
     queries.dayAheadPrices,
     queries.actualGeneration,
     queries.generationForecast,
     queries.actualLoad,
     queries.loadForecast,
     Promise.all(flows),
+    svkPromise,
   ])
+
+  // If ENTSO-E flows are not configured and Svenska kraftnät has real physical flows, enrich crossBorderFlows!
+  const crossBorderFlows = rawCrossBorderFlows.map((flow) => {
+    const svkNeighbor = svkData?.flows?.neighbors?.find(
+      (n) => n.neighbor === flow.neighbor || (flow.neighbor === 'DE-LU' && n.neighbor === 'DELU')
+    )
+    if (svkNeighbor && (flow.export.status !== 'ok' || flow.import.status !== 'ok')) {
+      const exportPoints = svkNeighbor.exports.map((p) => ({
+        timestamp: p.timestamp,
+        value: p.value,
+        category: null,
+        area: p.to,
+      }))
+      const importPoints = svkNeighbor.imports.map((p) => ({
+        timestamp: p.timestamp,
+        value: p.value,
+        category: null,
+        area: p.from,
+      }))
+      return {
+        neighbor: flow.neighbor,
+        export: exportPoints.length > 0
+          ? dataset('ok', 'measured_flow', 'MW', exportPoints)
+          : dataset('missing', 'measured_flow', 'MW', [], 'Inget nettoexportflöde registrerat.'),
+        import: importPoints.length > 0
+          ? dataset('ok', 'measured_flow', 'MW', importPoints)
+          : dataset('missing', 'measured_flow', 'MW', [], 'Inget nettoimportflöde registrerat.'),
+      }
+    }
+    return flow
+  })
 
   const weather = country === 'se'
     ? await Promise.all([
@@ -314,17 +352,39 @@ export async function getEnergyData({ country = 'se', zone, period = '24h', fetc
   const hasEntsoeErrors = entsoeDatasets.some((item) => item.status === 'error')
   const entsoeStatus = !token ? 'not_configured' : hasEntsoeValues && hasEntsoeErrors ? 'partial' : hasEntsoeValues ? 'ok' : hasEntsoeErrors ? 'error' : 'missing'
   const smhiStatus = country !== 'se' ? 'not_applicable' : weather.some((item) => item.status === 'ok') ? 'ok' : weather.some((item) => item.status === 'stale') ? 'stale' : weather.some((item) => item.status === 'error') ? 'error' : 'unavailable'
+  const svkStatus = svkData ? svkData.status : (country === 'se' ? 'error' : 'not_applicable')
+
+  const hasLiveValues = hasEntsoeValues || (svkData && svkData.status === 'ok')
 
   return {
-    mode: hasEntsoeValues ? 'live' : 'partial',
+    mode: hasLiveValues ? 'live' : 'partial',
     market: { country, countryLabel: area.countryLabel, zone: area.zone, eic: area.eic, period, timezone: area.timezone, start: interval.startDate.toISOString(), end: interval.endDate.toISOString() },
     sources: {
       entsoe: { status: entsoeStatus, label: 'ENTSO-E Transparency Platform', endpoint: 'https://web-api.tp.entsoe.eu/api', lastUpdated: [dayAheadPrices, actualGeneration, actualLoad].flatMap((item) => item.points).reduce((latest, point) => !latest || point.timestamp > latest ? point.timestamp : latest, null) },
+      svk: {
+        status: svkStatus,
+        label: 'Svenska kraftnät Öppna Data',
+        endpoint: 'https://data.svk.se/sv/api/3/action/',
+        url: 'https://data.svk.se',
+        siteTitle: svkData?.portal?.siteTitle ?? 'Svenska Kraftnät Data Service',
+        ckanVersion: svkData?.portal?.ckanVersion ?? null,
+        lastUpdated: svkData?.lastUpdated ?? null,
+        note: 'Officiellt maskinläsbart CKAN-gränssnitt med fysiska elflöden och stödtjänstmarknad (mFRR & aFRR).',
+      },
       smhi: { status: smhiStatus, label: 'SMHI Open Data' },
-      svkNotices: { status: 'not_configured', label: 'Svenska kraftnät – Information från driften', url: 'https://www.svk.se/om-kraftsystemet/kraftsystemdata/information-fran-driften/', note: noticesUnavailableNote },
+      svkNotices: {
+        status: svkStatus === 'ok' ? 'ok' : 'not_configured',
+        label: 'Svenska kraftnät – Information från driften & Öppna Data',
+        endpoint: 'https://data.svk.se/sv/api/3/action/',
+        url: 'https://data.svk.se',
+        note: svkStatus === 'ok'
+          ? 'Ansluten till Svenska kraftnäts CKAN API (data.svk.se/sv/api/3/action/). Fysiska elflöden och stödtjänster hämtas i realtid.'
+          : noticesUnavailableNote,
+      },
       smhiForecast: { status: 'not_configured', label: 'SMHI forecasts', note: forecastUnavailableNote },
     },
     datasets: { dayAheadPrices, actualGeneration, generationForecast, actualLoad, loadForecast, crossBorderFlows },
+    svk: svkData,
     weather,
     gridDisturbances: { status: 'not_configured', value: null, note: 'Market prices and weather observations are not evidence of a grid disturbance. No verified public disturbance feed is connected.' },
     retrievedAt: new Date(now).toISOString(),

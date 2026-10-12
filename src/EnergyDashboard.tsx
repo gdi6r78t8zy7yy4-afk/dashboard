@@ -14,13 +14,93 @@ import { ArrowUpRight, CloudSun, Info, Zap } from 'lucide-react'
 type Point = { timestamp: string; value: number; category: string | null; quality?: string | null }
 type Dataset = { status: string; dataType: string; unit: string; points: Point[]; lastUpdated: string | null; note: string | null }
 type WeatherObservation = { parameter: number; label: string; status: string; unit: string; station: string | null; points: Point[]; lastUpdated: string | null; note: string | null }
+
+type SvkLatestReserve = {
+  direction: string
+  volume: number
+  volumeUnit: string
+  price: number
+  priceUnit: string
+  timeSweden: string
+  timestamp: string | null
+}
+
+type SvkData = {
+  status: string
+  endpoint: string
+  label: string
+  url: string
+  lastUpdated: string | null
+  portal?: {
+    status: string
+    endpoint: string
+    siteTitle: string
+    siteUrl: string
+    ckanVersion: string | null
+    retrievedAt: string
+  }
+  flows?: {
+    status: string
+    zone: string
+    lastUpdated: string | null
+    neighbors: {
+      neighbor: string
+      exports: { timestamp: string; timeSweden: string; value: number; unit: string; from: string; to: string }[]
+      imports: { timestamp: string; timeSweden: string; value: number; unit: string; from: string; to: string }[]
+      latestExport: { timestamp: string; timeSweden: string; value: number; unit: string; from: string; to: string } | null
+      latestImport: { timestamp: string; timeSweden: string; value: number; unit: string; from: string; to: string } | null
+    }[]
+    recentRawRecords: {
+      start_time_sweden: string
+      from_bidding_zone: string
+      to_bidding_zone: string
+      power: number
+      power_unit: string
+    }[]
+  }
+  reserves?: {
+    status: string
+    zone: string
+    lastUpdated: string | null
+    mfrr: {
+      status: string
+      productName: string
+      latest: { latestUp: SvkLatestReserve | null; latestDown: SvkLatestReserve | null }
+      records: {
+        timeSweden: string
+        timestamp: string | null
+        direction: string
+        volume: number
+        volumeUnit: string
+        price: number
+        priceUnit: string
+      }[]
+    }
+    afrr: {
+      status: string
+      productName: string
+      latest: { latestUp: SvkLatestReserve | null; latestDown: SvkLatestReserve | null }
+      records: {
+        timeSweden: string
+        timestamp: string | null
+        direction: string
+        volume: number
+        volumeUnit: string
+        price: number
+        priceUnit: string
+      }[]
+    }
+  }
+}
+
 type EnergyResponse = {
   mode: string
   market: { country: string; countryLabel: string; zone: string; eic: string; period: string; timezone: string; start: string; end: string }
   sources: {
     entsoe: { status: string; label: string; endpoint: string; lastUpdated: string | null }
+    svk?: { status: string; label: string; endpoint: string; siteTitle?: string; ckanVersion?: string | null; lastUpdated: string | null; note?: string }
     smhi: { status: string; label: string }
-    svkNotices: { status: string; label: string; url: string; note: string }
+    svkNotices: { status: string; label: string; url: string; note: string; endpoint?: string }
     smhiForecast: { status: string; label: string; note: string }
   }
   datasets: {
@@ -31,6 +111,7 @@ type EnergyResponse = {
     loadForecast: Dataset
     crossBorderFlows: { neighbor: string; export: Dataset; import: Dataset }[]
   }
+  svk?: SvkData | null
   weather: WeatherObservation[]
   gridDisturbances: { status: string; value: null; note: string }
   retrievedAt: string
@@ -230,7 +311,10 @@ function EnergyDashboard() {
         <div className="energy-heading">
           <div className="energy-heading-icon"><Zap size={18} /></div>
           <div><div className="section-kicker">ENERGY SYSTEM DATA</div><h2>Market and operations</h2></div>
-          <Status value={data?.sources.entsoe.status ?? 'unavailable'} />
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            {data?.sources.svk && <Status value={data.sources.svk.status} />}
+            <Status value={data?.sources.entsoe.status ?? 'unavailable'} />
+          </div>
         </div>
         <div className="energy-selectors">
           <label>Country
@@ -274,6 +358,36 @@ function EnergyDashboard() {
             <LatestMetric label="Day-ahead market price" dataset={data.datasets.dayAheadPrices} timezone={timezone} />
             <LatestMetric label="Latest measured load" dataset={data.datasets.actualLoad} timezone={timezone} />
             <LatestMetric label="Latest measured generation" dataset={data.datasets.actualGeneration} timezone={timezone} />
+            {data.svk?.reserves && (
+              <>
+                <article className="energy-metric">
+                  <span>SVK mFRR Uppreglering ({data.market.zone})</span>
+                  <strong>
+                    {data.svk.reserves.mfrr.latest.latestUp
+                      ? `${data.svk.reserves.mfrr.latest.latestUp.volume} MW @ ${data.svk.reserves.mfrr.latest.latestUp.price} EUR/MW`
+                      : 'Ej avropad'}
+                  </strong>
+                  <small>
+                    {data.svk.reserves.mfrr.latest.latestUp?.timeSweden
+                      ? `SVK kl ${data.svk.reserves.mfrr.latest.latestUp.timeSweden.slice(11, 16)}`
+                      : 'Kapacitetsmarknad'}
+                  </small>
+                </article>
+                <article className="energy-metric">
+                  <span>SVK mFRR Nedreglering ({data.market.zone})</span>
+                  <strong>
+                    {data.svk.reserves.mfrr.latest.latestDown
+                      ? `${data.svk.reserves.mfrr.latest.latestDown.volume} MW @ ${data.svk.reserves.mfrr.latest.latestDown.price} EUR/MW`
+                      : 'Ej avropad'}
+                  </strong>
+                  <small>
+                    {data.svk.reserves.mfrr.latest.latestDown?.timeSweden
+                      ? `SVK kl ${data.svk.reserves.mfrr.latest.latestDown.timeSweden.slice(11, 16)}`
+                      : 'Kapacitetsmarknad'}
+                  </small>
+                </article>
+              </>
+            )}
             <article className="energy-metric disturbance-metric">
               <span>Verified grid disturbances</span>
               <strong>No feed</strong>
@@ -285,10 +399,118 @@ function EnergyDashboard() {
             <EnergyChart title="Day-ahead prices" description="MARKET PRICE · NOT GRID STABILITY" unit={price?.unit ?? 'EUR/MWh'} series={[{ name: 'Day-ahead', points: price?.points ?? [] }]} timezone={timezone} emptyStatus={price?.status} emptyNote={price?.note} />
             <EnergyChart title="Generation by production type" description="ACTUAL AND FORECAST VALUES ARE SEPARATE SERIES" unit={actualGeneration?.unit ?? 'MW'} series={generationSeries} timezone={timezone} emptyStatus={actualGeneration?.status} emptyNote={actualGeneration?.note} />
             <EnergyChart title="Consumption and load" description="MEASURED LOAD VS FORECAST" unit={actualLoad?.unit ?? 'MW'} series={loadSeries} timezone={timezone} emptyStatus={actualLoad?.status} emptyNote={actualLoad?.note} />
-            <EnergyChart title="Inter-area imports and exports" description="MEASURED CROSS-BORDER FLOWS" unit={data.datasets.crossBorderFlows[0]?.import.unit ?? 'MWh'} series={flowSeries} timezone={timezone} emptyStatus={data.datasets.crossBorderFlows[0]?.import.status} emptyNote={data.datasets.crossBorderFlows[0]?.import.note} />
+            <EnergyChart title="Inter-area imports and exports" description="MEASURED CROSS-BORDER FLOWS" unit={data.datasets.crossBorderFlows[0]?.import.unit ?? 'MW'} series={flowSeries} timezone={timezone} emptyStatus={data.datasets.crossBorderFlows[0]?.import.status} emptyNote={data.datasets.crossBorderFlows[0]?.import.note} />
           </div>
 
           <div className="energy-detail-grid">
+            {data.svk && (
+              <article className="panel energy-svk-panel">
+                <div className="energy-svk-header">
+                  <div className="energy-svk-title">
+                    <div className="section-kicker">SVENSKA KRAFTNÄT · ÖPPNA DATA</div>
+                    <h2>
+                      <Zap size={16} /> Frekvens- & kapacitetsmarknad ({data.market.zone})
+                    </h2>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span className="energy-svk-endpoint-pill">
+                      https://data.svk.se/sv/api/3/action/
+                    </span>
+                    <Status value={data.svk.status} />
+                  </div>
+                </div>
+
+                <div className="energy-svk-grid">
+                  {/* mFRR Card */}
+                  <div className="energy-svk-card">
+                    <div className="energy-svk-card-title">
+                      <span>mFRR Kapacitetsmarknad</span>
+                      <small style={{ fontSize: '9px', color: '#6e7770' }}>{data.market.zone}</small>
+                    </div>
+                    <span className="energy-svk-card-sub">Manuell frekvensåterställningsreserv (SVK CKAN)</span>
+                    <div className="energy-svk-stat-row">
+                      <span className="energy-svk-badge-up">Uppreglering</span>
+                      <span className="energy-svk-stat-val">
+                        {data.svk.reserves?.mfrr?.latest.latestUp
+                          ? `${data.svk.reserves.mfrr.latest.latestUp.volume} MW @ ${data.svk.reserves.mfrr.latest.latestUp.price} EUR/MW`
+                          : 'Ingen avropad'}
+                      </span>
+                    </div>
+                    <div className="energy-svk-stat-row">
+                      <span className="energy-svk-badge-down">Nedreglering</span>
+                      <span className="energy-svk-stat-val">
+                        {data.svk.reserves?.mfrr?.latest.latestDown
+                          ? `${data.svk.reserves.mfrr.latest.latestDown.volume} MW @ ${data.svk.reserves.mfrr.latest.latestDown.price} EUR/MW`
+                          : 'Ingen avropad'}
+                      </span>
+                    </div>
+                    <small style={{ fontSize: '8px', color: '#889189', marginTop: '4px' }}>
+                      Starttid svensk tid: {data.svk.reserves?.mfrr?.latest.latestUp?.timeSweden || data.svk.reserves?.mfrr?.latest.latestDown?.timeSweden || 'Senaste auktion'}
+                    </small>
+                  </div>
+
+                  {/* aFRR Card */}
+                  <div className="energy-svk-card">
+                    <div className="energy-svk-card-title">
+                      <span>aFRR Kapacitetsmarknad</span>
+                      <small style={{ fontSize: '9px', color: '#6e7770' }}>{data.market.zone}</small>
+                    </div>
+                    <span className="energy-svk-card-sub">Automatisk frekvensåterställningsreserv (SVK CKAN)</span>
+                    <div className="energy-svk-stat-row">
+                      <span className="energy-svk-badge-up">Uppreglering</span>
+                      <span className="energy-svk-stat-val">
+                        {data.svk.reserves?.afrr?.latest.latestUp
+                          ? `${data.svk.reserves.afrr.latest.latestUp.volume} MW @ ${data.svk.reserves.afrr.latest.latestUp.price} EUR/MW`
+                          : 'Ej avropad denna timme'}
+                      </span>
+                    </div>
+                    <div className="energy-svk-stat-row">
+                      <span className="energy-svk-badge-down">Nedreglering</span>
+                      <span className="energy-svk-stat-val">
+                        {data.svk.reserves?.afrr?.latest.latestDown
+                          ? `${data.svk.reserves.afrr.latest.latestDown.volume} MW @ ${data.svk.reserves.afrr.latest.latestDown.price} EUR/MW`
+                          : 'Ej avropad denna timme'}
+                      </span>
+                    </div>
+                    <small style={{ fontSize: '8px', color: '#889189', marginTop: '4px' }}>
+                      Starttid svensk tid: {data.svk.reserves?.afrr?.latest.latestUp?.timeSweden || data.svk.reserves?.afrr?.latest.latestDown?.timeSweden || 'Senaste auktion'}
+                    </small>
+                  </div>
+
+                  {/* Physical Flows Card */}
+                  <div className="energy-svk-card">
+                    <div className="energy-svk-card-title">
+                      <span>Överföringsflöden i stamnätet</span>
+                      <small style={{ fontSize: '9px', color: '#6e7770' }}>15-min mätning</small>
+                    </div>
+                    <span className="energy-svk-card-sub">Dataset: net_cross_border_physical_flows</span>
+                    {data.svk.flows?.recentRawRecords && data.svk.flows.recentRawRecords.length > 0 ? (
+                      <div style={{ display: 'grid', gap: '3px', marginTop: '2px' }}>
+                        {data.svk.flows.recentRawRecords.slice(0, 4).map((r, i) => (
+                          <div key={i} className="energy-svk-stat-row">
+                            <span><b>{r.from_bidding_zone}</b> → <b>{r.to_bidding_zone}</b></span>
+                            <span className="energy-svk-stat-val">{r.power} {r.power_unit}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '9px', color: '#889189' }}>Inga flöden registrerade</span>
+                    )}
+                    <small style={{ fontSize: '8px', color: '#889189', marginTop: '4px' }}>
+                      Senaste mätning: {data.svk.flows?.recentRawRecords[0]?.start_time_sweden || 'Realtid'}
+                    </small>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', borderTop: '1px solid #e5ebe7', paddingTop: '8px', fontSize: '9px', color: '#6d7770' }}>
+                  <span>Kopplad till Svenska kraftnäts CKAN API: datastore_search & status_show</span>
+                  <a className="source-link" style={{ marginTop: 0 }} href="https://data.svk.se" target="_blank" rel="noreferrer">
+                    Öppna data.svk.se portal <ArrowUpRight size={13} />
+                  </a>
+                </div>
+              </article>
+            )}
+
             <article className="panel energy-production-panel">
               <div className="section-kicker">LATEST PRODUCTION VALUES</div>
               <h2>By production type</h2>
@@ -309,7 +531,7 @@ function EnergyDashboard() {
                   <span>Export <b>{flow.exported ? `${flow.exported.value} ${flow.exportUnit}` : statusLabels[flow.exportStatus]}</b></span>
                 </div>
               )) : <div className="energy-empty">No adjacent-area flows are configured for this selection.</div>}
-              <small className="energy-flow-note">ENTSO-E aggregated flow quantities are reported per interval; the provider's unit is shown.</small>
+              <small className="energy-flow-note">Flöden från Svenska kraftnät CKAN datastore (MW) eller ENTSO-E.</small>
             </article>
 
             <article className="panel energy-weather-panel">
@@ -332,10 +554,33 @@ function EnergyDashboard() {
             <article className="panel energy-source-panel">
               <div className="section-kicker">DATA PROVENANCE</div>
               <h2>Source health and freshness</h2>
+              {data.sources.svk && (
+                <>
+                  <div className="energy-source-row">
+                    <span>{data.sources.svk.label}</span>
+                    <Status value={data.sources.svk.status} />
+                  </div>
+                  <div className="energy-source-row">
+                    <span>SVK API-endpoint</span>
+                    <strong style={{ fontFamily: 'monospace', fontSize: '8px' }}>https://data.svk.se/sv/api/3/action/</strong>
+                  </div>
+                  {data.sources.svk.ckanVersion && (
+                    <div className="energy-source-row">
+                      <span>CKAN Version</span>
+                      <strong>{data.sources.svk.ckanVersion}</strong>
+                    </div>
+                  )}
+                  <div className="energy-source-row">
+                    <span>Senaste SVK-mätning</span>
+                    <strong>{formatTime(data.sources.svk.lastUpdated)}</strong>
+                  </div>
+                </>
+              )}
               <div className="energy-source-row"><span>{data.sources.entsoe.label}</span><Status value={data.sources.entsoe.status} /></div>
               <div className="energy-source-row"><span>{data.sources.smhi.label}</span><Status value={data.sources.smhi.status} /></div>
               <div className="energy-source-row"><span>Latest ENTSO-E data</span><strong>{formatTime(data.sources.entsoe.lastUpdated)}</strong></div>
               <div className="energy-source-row"><span>Retrieved from backend</span><strong>{formatTime(data.retrievedAt)}</strong></div>
+              <a className="source-link" href="https://data.svk.se" target="_blank" rel="noreferrer">Svenska kraftnät Dataportal (data.svk.se) <ArrowUpRight size={14} /></a>
               <a className="source-link" href="https://transparency.entsoe.eu/" target="_blank" rel="noreferrer">ENTSO-E Transparency Platform <ArrowUpRight size={14} /></a>
             </article>
           </div>
