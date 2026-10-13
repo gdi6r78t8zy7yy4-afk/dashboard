@@ -7,6 +7,8 @@ import { getInternetDashboard } from './internetService.mjs'
 import { getCyberDashboard, getCyberCveDetails } from './cyberService.mjs'
 import { getEventsDashboard } from './eventsService.mjs'
 import { getTransportDashboard } from './transportService.mjs'
+// Import weather services
+import { getWeatherData, getLocationInfo } from './weather/weatherService.mjs'
 
 const port = Number(process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '127.0.0.1'
@@ -162,6 +164,61 @@ const server = createServer(async (request, response) => {
     } catch (error) {
       response.writeHead(500)
       response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Kunde inte hämta transportdata.' }))
+    }
+    return
+  }
+
+  // Weather API routes
+  if (url.pathname === '/api/v1/weather') {
+    try {
+      const lat = url.searchParams.get('lat')
+      const lon = url.searchParams.get('lon')
+      const timezone = url.searchParams.get('timezone')
+      
+      if (!lat || !lon) {
+        response.writeHead(400)
+        response.end(JSON.stringify({ 
+          error: 'Missing required parameters',
+          message: 'Latitude (lat) and longitude (lon) are required'
+        }))
+        return
+      }
+      
+      const result = await getWeatherData(parseFloat(lat), parseFloat(lon), { timezone })
+      response.writeHead(200)
+      response.end(JSON.stringify(result))
+    } catch (error) {
+      response.writeHead(500)
+      response.end(JSON.stringify({ 
+        error: 'Internal server error',
+        message: 'Failed to fetch weather data'
+      }))
+    }
+    return
+  }
+
+  if (url.pathname === '/api/v1/weather/search') {
+    try {
+      const query = url.searchParams.get('query')
+      
+      if (!query) {
+        response.writeHead(400)
+        response.end(JSON.stringify({ 
+          error: 'Missing query parameter',
+          message: 'Search query is required'
+        }))
+        return
+      }
+      
+      const result = await getLocationInfo(query)
+      response.writeHead(200)
+      response.end(JSON.stringify(result))
+    } catch (error) {
+      response.writeHead(500)
+      response.end(JSON.stringify({ 
+        error: 'Internal server error',
+        message: 'Failed to search locations'
+      }))
     }
     return
   }

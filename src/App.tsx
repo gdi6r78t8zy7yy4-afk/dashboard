@@ -29,6 +29,7 @@ import type { LucideIcon } from 'lucide-react'
 import { siteConfig } from './config/siteConfig'
 import { summarizeStatuses } from './services/statusSummary'
 import type { ServiceStatus, StatusLevel } from './services/statusSummary'
+import './styles/weather.css'
 
 const EnergyDashboard = lazy(() => import('./EnergyDashboard'))
 const TelecomDashboard = lazy(() => import('./TelecomDashboard'))
@@ -36,6 +37,7 @@ const InternetDashboard = lazy(() => import('./InternetDashboard'))
 const CyberDashboard = lazy(() => import('./CyberDashboard'))
 const WorldEventsDashboard = lazy(() => import('./WorldEventsDashboard'))
 const TransportDashboard = lazy(() => import('./TransportDashboard'))
+const WeatherDashboard = lazy(() => import('./WeatherDashboard'))
 
 type DashboardId =
   | 'overview'
@@ -490,7 +492,9 @@ function App() {
                   ? 'Välj land, elområde och period. Källkvalitet och mätvärden visas nedan.'
                   : activeDashboard === 'telecom'
                     ? 'Årlig PTS-täckningsstatistik, RIPE RIS BGP-observationer och IODA-avbrottssignaler.'
-                    : `Koordinerad status för samhällsviktiga funktioner i ${selectedRegion.label}.`}
+                    : activeDashboard === 'weather'
+                      ? 'Global väderinformation och väderhändelser'
+                      : `Koordinerad status för samhällsviktiga funktioner i ${selectedRegion.label}.`}
               </p>
               {activeDashboard !== 'overview' && (
                 <button
@@ -990,6 +994,11 @@ function App() {
           {activeDashboard === 'aviation' && (
             <Suspense fallback={<p className="data-message" role="status">Laddar flygdata från OpenSky Network…</p>}>
               <TransportDashboard initialMode="aviation" region={activeRegion} />
+            </Suspense>
+          )}
+          {activeDashboard === 'weather' && (
+            <Suspense fallback={<p className="data-message" role="status">Laddar väderdata…</p>}>
+              <WeatherDashboard />
             </Suspense>
           )}
 
