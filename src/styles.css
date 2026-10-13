@@ -442,6 +442,126 @@ h2 { margin: 0; color: #28312b; font-size: 14px; font-weight: 600; }
   margin-bottom: 4px;
 }
 
+/* Source health section */
+.energy-source-health-panel {
+  grid-column: 1 / -1;
+}
+
+.energy-source-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.energy-source-health-card {
+  border: 1px solid #e6e9e3;
+  border-radius: 7px;
+  background: #fff;
+  padding: 16px;
+}
+
+.energy-source-health-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.energy-source-health-header strong {
+  font-size: 12px;
+  color: #323d34;
+}
+
+.energy-source-health-header small {
+  font-size: 9px;
+  color: #8e958d;
+  margin-top: 2px;
+}
+
+.energy-source-health-desc {
+  margin: 0 0 12px 0;
+  color: #727a71;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.energy-source-health-meta {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #f0f2ee;
+  padding-top: 12px;
+  font-size: 9px;
+  color: #7f867e;
+}
+
+.energy-source-health-meta div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.energy-source-health-meta strong {
+  color: #3d473f;
+  font-weight: 600;
+}
+
+/* Status icons */
+.energy-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 4px;
+  background: #edf0eb;
+  padding: 4px 6px;
+  color: #687268;
+  font-size: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.energy-status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.energy-status.ok {
+  background: #edf5ef;
+  color: #4b8065;
+}
+
+.energy-status.configured {
+  background: #edf0eb;
+  color: #687268;
+}
+
+.energy-status.not_configured, .energy-status.unavailable, .energy-status.missing {
+  background: #f8f1e5;
+  color: #a67637;
+}
+
+.energy-status.error, .energy-status.stale {
+  background: #f8eeeb;
+  color: #b65f51;
+}
+
+.energy-status.not_applicable {
+  background: #f0f1ef;
+  color: #757d75;
+}
+
+.energy-status.partial {
+  background: #f8f1e5;
+  color: #a67637;
+}
+
+/* Status icons with icons */
+.energy-status svg {
+  flex-shrink: 0;
+}
+
 @media (min-width: 1550px) {
   .dashboard-content { padding-top: 42px; }
   .service-card { min-height: 174px; padding: 15px 16px 11px; }
