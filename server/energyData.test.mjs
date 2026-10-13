@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildEntsoeUrl, getEnergyArea, getEnergyData, normalizeEntsoeUnit, parseEntsoeXml } from './energyData.mjs'
+import { buildEntsoeUrl, getEnergyArea, getEnergyData, intervalFor, normalizeEntsoeUnit, parseEntsoeXml, utcParameter } from './energyData.mjs'
 
 const priceXml = `<?xml version="1.0" encoding="UTF-8"?>
 <Publication_MarketDocument>
@@ -166,5 +166,50 @@ describe('energy data adapter', () => {
     expect(se4Flow.export.status).toBe('ok')
     expect(se4Flow.export.unit).toBe('MW')
     expect(se4Flow.export.points[0].value).toBe(1850.5)
+  })
+
+  it('formats UTC parameters strictly as 12-digit yyyyMMddHHmm without T character', () => {
+    const testDate = new Date('2026-10-13T08:30:45.000Z')
+    const formatted = utcParameter(testDate)
+    expect(formatted).toBe('202610130830')
+    expect(formatted.length).toBe(12)
+    expect(formatted).not.toContain('T')
+    expect(/^[0-9]{12}$/.test(formatted)).toBe(true)
+
+    const interval = intervalFor('24h', testDate)
+    expect(interval.start).toBe('202610120800')
+    expect(interval.end).toBe('202610130800')
+    expect(/^[0-9]{12}$/.test(interval.start)).toBe(true)
+    expect(/^[0-9]{12}$/.test(interval.end)).toBe(true)
+  })
+
+  it('surfaces detailed Reason text from ENTSO-E XML error responses when HTTP 400 is returned', async () => {
+    const errorXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Acknowledgement_MarketDocument xmlns="urn:iec62325.351:tc57wg16:451-1:acknowledgementdocument:7:0">
+  <Reason>
+    <code>999</code>
+    <text>The input parameter periodStart is not valid. Valid format: yyyyMMddHHmm</text>
+  </Reason>
+</Acknowledgement_MarketDocument>`
+
+    const fetchImpl = vi.fn(async (url) => {
+      if (String(url).includes('web-api.tp.entsoe.eu')) {
+        return new Response(errorXml, { status: 400, headers: { 'Content-Type': 'application/xml' } })
+      }
+      return new Response('{}', { status: 200 })
+    })
+
+    const result = await getEnergyData({
+      country: 'se',
+      zone: 'SE3',
+      period: '24h',
+      token: 'valid-token',
+      fetchImpl,
+      now: new Date('2026-10-10T12:00:00Z'),
+      enableSvk: false,
+    })
+
+    expect(result.datasets.dayAheadPrices.status).toBe('error')
+    expect(result.datasets.dayAheadPrices.note).toContain('The input parameter periodStart is not valid')
   })
 })

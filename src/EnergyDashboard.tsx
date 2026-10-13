@@ -12,13 +12,9 @@ import {
   Bar,
   AreaChart,
   Area,
-  ComposedChart,
-  ScatterChart,
-  Scatter,
-  ReferenceLine,
-  LabelList
+  ReferenceLine
 } from 'recharts'
-import { ArrowUpRight, CloudSun, Info, Zap, TrendingUp, TrendingDown, Activity, Gauge, AlertTriangle, CheckCircle, Clock, X } from 'lucide-react'
+import { ArrowUpRight, CloudSun, Info, Zap, TrendingUp, TrendingDown, Activity, Gauge } from 'lucide-react'
 
 type Point = { timestamp: string; value: number; category: string | null; quality?: string | null }
 type Dataset = { status: string; dataType: string; unit: string; points: Point[]; lastUpdated: string | null; note: string | null }
@@ -108,7 +104,7 @@ type EnergyResponse = {
   sources: {
     entsoe: { status: string; label: string; endpoint: string; lastUpdated: string | null }
     svk?: { status: string; label: string; endpoint: string; siteTitle?: string; ckanVersion?: string | null; lastUpdated: string | null; note?: string }
-    smhi: { status: string; label: string }
+    smhi: { status: string; label: string; lastUpdated?: string | null }
     svkNotices: { status: string; label: string; url: string; note: string; endpoint?: string }
     smhiForecast: { status: string; label: string; note: string }
     nordpool?: { status: string; label: string; endpoint: string; lastUpdated: string | null; note?: string }
@@ -126,59 +122,6 @@ type EnergyResponse = {
   gridDisturbances: { status: string; value: null; note: string }
   retrievedAt: string
   nordpool?: Record<string, any> | null
-}
-
-type PriceDetail = {
-  timestamp: string;
-  value: number;
-  unit: string;
-  source: string;
-  area: string;
-  deliveryStart?: string;
-  deliveryEnd?: string;
-  metadata?: Record<string, any>;
-}
-
-type ProductionDetail = {
-  metric: string;
-  area: string;
-  value: number;
-  unit: string;
-  interval: string;
-  source: string;
-  isForecast: boolean;
-  timestamp: string;
-}
-
-type ForecastDetail = {
-  metric: string;
-  area: string;
-  forecastHorizon: string;
-  publicationTime: string;
-  source: string;
-  isForecast: boolean;
-  values: { timestamp: string; value: number }[];
-}
-
-type FlowDetail = {
-  area: string;
-  source: string;
-  timestamp: string;
-  value: number;
-  unit: string;
-  direction: 'import' | 'export';
-}
-
-type SourceDetail = {
-  name: string;
-  status: string;
-  lastSuccessfulUpdate: string | null;
-  lastAttemptedUpdate: string | null;
-  freshness: string;
-  authenticationStatus: string;
-  errorInfo?: string;
-  documentationLink: string;
-  datasets: string[];
 }
 
 const countryOptions = [
@@ -226,6 +169,26 @@ function latestByCategory(points: Point[]) {
   return [...byCategory.entries()].map(([category, point]) => ({ ...point, category }))
 }
 
+function Status({ value }: { value: string }) {
+  const labels: Record<string, string> = {
+    ok: 'Tillgänglig',
+    configured: 'Konfigurerad',
+    partial: 'Delvis',
+    unavailable: 'Ej tillgänglig',
+    missing: 'Saknas',
+    stale: 'Inaktuell',
+    error: 'Fel',
+    not_applicable: 'Ej tillämplig',
+    not_configured: 'Ej konfigurerad'
+  }
+  return (
+    <span className={`energy-status ${value}`}>
+      <i />
+      {labels[value] || value}
+    </span>
+  )
+}
+
 function PriceChart({
   title,
   description,
@@ -235,7 +198,6 @@ function PriceChart({
   emptyStatus,
   emptyNote,
   area,
-  period,
   nordpoolData
 }: {
   title: string
@@ -246,26 +208,26 @@ function PriceChart({
   emptyStatus?: string
   emptyNote?: string | null
   area: string
-  period: string
+  period?: string
   nordpoolData?: Record<string, any> | null
 }) {
   const chart = makeChartRows(series)
   
   // Get Nord Pool data if available
-  const nordpoolSeries = [];
+  const nordpoolSeries = []
   if (nordpoolData && nordpoolData[area]) {
-    const nordpool = nordpoolData[area];
+    const nordpool = nordpoolData[area]
     if (nordpool && nordpool.data && nordpool.data.length > 0) {
       const points = nordpool.data.map((point: any) => ({
         timestamp: point.timestamp,
         value: point.value
-      }));
-      nordpoolSeries.push({ name: 'Nord Pool Price', points });
+      }))
+      nordpoolSeries.push({ name: 'Nord Pool Price', points })
     }
   }
 
   // Combine with existing series if available
-  const allSeries = [...series, ...nordpoolSeries];
+  const allSeries = [...series, ...nordpoolSeries]
   
   return (
     <article className="panel energy-chart-panel">
@@ -310,13 +272,12 @@ function PriceChart({
               ))}
               {allSeries.length > 0 && (
                 <ReferenceLine 
-                  y={allSeries[0].points.length > 0 ? allSeries[0].points.reduce((sum, p) => sum + p.value, 0) / allSeries[0].points.length : 0}
+                  y={allSeries[0].points.length > 0 ? allSeries[0].points.reduce((sum: number, p: Point) => sum + p.value, 0) / allSeries[0].points.length : 0}
                   stroke="#899188"
                   strokeDasharray="3 3"
                   strokeWidth={1}
-                >
-                  <LabelList position="right" value="Avg" />
-                </ReferenceLine>
+                  label="Avg"
+                />
               )}
             </AreaChart>
           </ResponsiveContainer>
@@ -328,27 +289,27 @@ function PriceChart({
 
 // Helper function to calculate statistics
 function calculatePriceStats(points: Point[]) {
-  if (!points || points.length === 0) return null;
+  if (!points || points.length === 0) return null
   
-  const values = points.map(p => p.value).filter(v => v !== undefined && v !== null);
-  if (values.length === 0) return null;
+  const values = points.map(p => p.value).filter(v => v !== undefined && v !== null)
+  if (values.length === 0) return null
   
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = [...values].sort((a, b) => a - b)
   return {
     min: sorted[0],
     max: sorted[sorted.length - 1],
     avg: values.reduce((sum, val) => sum + val, 0) / values.length,
     count: values.length
-  };
+  }
 }
 
 function makeChartRows(series: { name: string; points: Point[] }[]) {
-  const rows: Record<string, number | string> = {}
+  const rows: Record<string, Record<string, number | string>> = {}
   for (const item of series) {
     for (const point of item.points) {
       const timestamp = point.timestamp
       if (!rows[timestamp]) rows[timestamp] = { timestamp }
-      ;(rows[timestamp] as Record<string, number | string>)[item.name] = point.value
+      rows[timestamp][item.name] = point.value
     }
   }
   return { rows: Object.values(rows), series }
@@ -447,7 +408,7 @@ function SourceHealthSection({ sources, timezone }: { sources: EnergyResponse['s
             </div>
             <div>
               <span>Last update</span>
-              <strong>{formatTime(sources.smhi.lastUpdated)}</strong>
+              <strong>{formatTime(sources.smhi.lastUpdated ?? null)}</strong>
             </div>
           </div>
         </div>
@@ -602,18 +563,6 @@ function EnergyDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const countryChoice = countryOptions.find((item) => item.id === country) ?? countryOptions[0]
-  
-  // Detail view state
-  const [selectedPricePoint, setSelectedPricePoint] = useState<PriceDetail | null>(null)
-  const [selectedProductionMetric, setSelectedProductionMetric] = useState<ProductionDetail | null>(null)
-  const [selectedForecastMetric, setSelectedForecastMetric] = useState<ForecastDetail | null>(null)
-  const [selectedFlowMetric, setSelectedFlowMetric] = useState<FlowDetail | null>(null)
-  const [selectedSource, setSelectedSource] = useState<SourceDetail | null>(null)
-  const [showPriceDetail, setShowPriceDetail] = useState(false)
-  const [showProductionDetail, setShowProductionDetail] = useState(false)
-  const [showForecastDetail, setShowForecastDetail] = useState(false)
-  const [showFlowDetail, setShowFlowDetail] = useState(false)
-  const [showSourceDetail, setShowSourceDetail] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -663,29 +612,26 @@ function EnergyDashboard() {
   const timezone = data?.market.timezone ?? 'Europe/Stockholm'
   
   // Calculate price statistics if available
-  const priceStats = price ? calculatePriceStats(price.points) : null;
+  const priceStats = price ? calculatePriceStats(price.points) : null
   
   // Check if Nord Pool data is available for current zone
-  const hasNordPoolData = data?.nordpool && data.nordpool[zone] && data.nordpool[zone].data?.length > 0;
+  const hasNordPoolData = !!(data?.nordpool && data.nordpool[zone] && data.nordpool[zone].data?.length > 0)
   
   // Additional data for enhanced charts
-  const nordPoolPriceData = data?.nordpool;
+  const nordPoolPriceData = data?.nordpool
   
   // Get all Swedish zones for price comparison
-  const allZones = ['SE1', 'SE2', 'SE3', 'SE4'];
+  const allZones = ['SE1', 'SE2', 'SE3', 'SE4']
   
   // Prepare price data for each zone if available
-  const priceDataByZone = allZones.map(zone => {
-    const zonePrice = data?.datasets.dayAheadPrices;
+  const priceDataByZone = allZones.map(zoneName => {
+    const zonePrice = data?.datasets.dayAheadPrices
     return {
-      zone,
+      zone: zoneName,
       priceData: zonePrice?.points || [],
       unit: zonePrice?.unit || 'EUR/MWh'
-    };
-  });
-  
-  // Calculate price statistics if available
-  const priceStats = price ? calculatePriceStats(price.points) : null;
+    }
+  })
 
   return (
     <section className="energy-dashboard" aria-label="Electricity market and system data">
@@ -1286,73 +1232,6 @@ function TransmissionCapacityChart({
   )
 }
 
-function BalancingChart({
-  title,
-  description,
-  unit,
-  series,
-  timezone,
-  emptyStatus,
-  emptyNote
-}: {
-  title: string
-  description: string
-  unit: string
-  series: { name: string; points: Point[] }[]
-  timezone: string
-  emptyStatus?: string
-  emptyNote?: string | null
-}) {
-  const chart = makeChartRows(series)
-  
-  return (
-    <article className="panel energy-chart-panel">
-      <div className="panel-heading">
-        <div><div className="section-kicker">{description}</div><h2>{title}</h2></div>
-        <span className="energy-unit">{unit}</span>
-      </div>
-      {chart.rows.length === 0 ? (
-        <div className="energy-chart-empty"><Status value={emptyStatus ?? 'missing'} /><span>{emptyNote ?? 'No published series for this area and period.'}</span></div>
-      ) : (
-        <div className="energy-chart">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chart.rows} margin={{ top: 10, right: 12, bottom: 2, left: 0 }}>
-              <CartesianGrid stroke="#edf0eb" strokeDasharray="3 4" vertical={false} />
-              <XAxis 
-                dataKey="timestamp" 
-                tickFormatter={(value) => formatTime(String(value), timezone).replace(/,\s*/, ' ')} 
-                minTickGap={26} 
-                tick={{ fill: '#899188', fontSize: 9 }} 
-                axisLine={false} 
-                tickLine={false} 
-              />
-              <YAxis width={48} tick={{ fill: '#899188', fontSize: 9 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                labelFormatter={(value) => formatTime(String(value), timezone)}
-                formatter={(value) => [`${Number(value).toLocaleString('en-GB')} ${unit}`]}
-                contentStyle={{ borderColor: '#e2e8e1', borderRadius: 6, fontSize: 10 }}
-              />
-              {chart.series.length > 1 && <Legend wrapperStyle={{ fontSize: 9 }} />}
-              {chart.series.map((item, index) => (
-                <Line
-                  key={item.name}
-                  type="monotone"
-                  dataKey={item.name}
-                  stroke={chartColors[index % chartColors.length]}
-                  strokeWidth={2}
-                  dot={false}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </article>
-  )
-}
-
 function PriceComparisonChart({
   title,
   description,
@@ -1362,7 +1241,6 @@ function PriceComparisonChart({
   emptyStatus,
   emptyNote,
   area,
-  period,
   nordpoolData
 }: {
   title: string
@@ -1373,26 +1251,26 @@ function PriceComparisonChart({
   emptyStatus?: string
   emptyNote?: string | null
   area: string
-  period: string
+  period?: string
   nordpoolData?: Record<string, any> | null
 }) {
   const chart = makeChartRows(series)
   
   // Get Nord Pool data if available
-  const nordpoolSeries = [];
+  const nordpoolSeries = []
   if (nordpoolData && nordpoolData[area]) {
-    const nordpool = nordpoolData[area];
+    const nordpool = nordpoolData[area]
     if (nordpool && nordpool.data && nordpool.data.length > 0) {
       const points = nordpool.data.map((point: any) => ({
         timestamp: point.timestamp,
         value: point.value
-      }));
-      nordpoolSeries.push({ name: 'Nord Pool Price', points });
+      }))
+      nordpoolSeries.push({ name: 'Nord Pool Price', points })
     }
   }
 
   // Combine with existing series if available
-  const allSeries = [...series, ...nordpoolSeries];
+  const allSeries = [...series, ...nordpoolSeries]
   
   return (
     <article className="panel energy-chart-panel">
@@ -1441,398 +1319,6 @@ function PriceComparisonChart({
       )}
     </article>
   )
-}
-
-// Detail view modals
-
-function PriceDetailModal({ 
-  detail, 
-  onClose 
-}: { 
-  detail: PriceDetail | null; 
-  onClose: () => void; 
-}) {
-  if (!detail) return null;
-  
-  return (
-    <div className="detail-sheet" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="detail-sheet-card" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-heading detail-header">
-          <div>
-            <div className="section-kicker">PRISDETALJER</div>
-            <h2>Price Detail: {detail.area}</h2>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={onClose}
-            aria-label="Stäng detaljvy"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        
-        <div className="detail-body">
-          <div className="detail-badges">
-            <span className="quality-pill">Price Data</span>
-          </div>
-          
-          <p>Price information for {detail.area} at timestamp {formatTime(detail.timestamp)}</p>
-          
-          <dl className="detail-meta">
-            <div>
-              <dt>Price Value</dt>
-              <dd>{detail.value} {detail.unit}</dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd>{detail.source}</dd>
-            </div>
-            <div>
-              <dt>Area</dt>
-              <dd>{detail.area}</dd>
-            </div>
-            <div>
-              <dt>Timestamp</dt>
-              <dd>{formatTime(detail.timestamp)}</dd>
-            </div>
-          </dl>
-          
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
-            <button
-              type="button"
-              className="kind-filter-btn active"
-              onClick={onClose}
-            >
-              Stäng
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ProductionDetailModal({ 
-  detail, 
-  onClose 
-}: { 
-  detail: ProductionDetail | null; 
-  onClose: () => void; 
-}) {
-  if (!detail) return null;
-  
-  return (
-    <div className="detail-sheet" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="detail-sheet-card" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-heading detail-header">
-          <div>
-            <div className="section-kicker">PRODUKTIONSDETALJER</div>
-            <h2>Production Detail: {detail.metric}</h2>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={onClose}
-            aria-label="Stäng detaljvy"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        
-        <div className="detail-body">
-          <div className="detail-badges">
-            <span className="quality-pill">{detail.isForecast ? 'Forecast' : 'Measured'} Data</span>
-          </div>
-          
-          <p>Detailed information about {detail.metric} production</p>
-          
-          <dl className="detail-meta">
-            <div>
-              <dt>Metric</dt>
-              <dd>{detail.metric}</dd>
-            </div>
-            <div>
-              <dt>Area</dt>
-              <dd>{detail.area}</dd>
-            </div>
-            <div>
-              <dt>Value</dt>
-              <dd>{detail.value} {detail.unit}</dd>
-            </div>
-            <div>
-              <dt>Interval</dt>
-              <dd>{detail.interval}</dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd>{detail.source}</dd>
-            </div>
-            <div>
-              <dt>Type</dt>
-              <dd>{detail.isForecast ? 'Forecast' : 'Actual measurement'}</dd>
-            </div>
-          </dl>
-          
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
-            <button
-              type="button"
-              className="kind-filter-btn active"
-              onClick={onClose}
-            >
-              Stäng
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ForecastDetailModal({ 
-  detail, 
-  onClose 
-}: { 
-  detail: ForecastDetail | null; 
-  onClose: () => void; 
-}) {
-  if (!detail) return null;
-  
-  return (
-    <div className="detail-sheet" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="detail-sheet-card" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-heading detail-header">
-          <div>
-            <div className="section-kicker">FÖRUTSÄGELSEDETALJER</div>
-            <h2>Forecast Detail: {detail.metric}</h2>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={onClose}
-            aria-label="Stäng detaljvy"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        
-        <div className="detail-body">
-          <div className="detail-badges">
-            <span className="quality-pill">Forecast Data</span>
-          </div>
-          
-          <p>Forecast information for {detail.metric}</p>
-          
-          <dl className="detail-meta">
-            <div>
-              <dt>Metric</dt>
-              <dd>{detail.metric}</dd>
-            </div>
-            <div>
-              <dt>Area</dt>
-              <dd>{detail.area}</dd>
-            </div>
-            <div>
-              <dt>Horizon</dt>
-              <dd>{detail.forecastHorizon}</dd>
-            </div>
-            <div>
-              <dt>Publication Time</dt>
-              <dd>{formatTime(detail.publicationTime)}</dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd>{detail.source}</dd>
-            </div>
-            <div>
-              <dt>Values Count</dt>
-              <dd>{detail.values.length}</dd>
-            </div>
-          </dl>
-          
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
-            <button
-              type="button"
-              className="kind-filter-btn active"
-              onClick={onClose}
-            >
-              Stäng
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FlowDetailModal({ 
-  detail, 
-  onClose 
-}: { 
-  detail: FlowDetail | null; 
-  onClose: () => void; 
-}) {
-  if (!detail) return null;
-  
-  return (
-    <div className="detail-sheet" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="detail-sheet-card" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-heading detail-header">
-          <div>
-            <div className="section-kicker">FLÖDESDETALJER</div>
-            <h2>Flow Detail: {detail.direction}</h2>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={onClose}
-            aria-label="Stäng detaljvy"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        
-        <div className="detail-body">
-          <div className="detail-badges">
-            <span className="quality-pill">Flow Data</span>
-          </div>
-          
-          <p>Flow information for {detail.area}</p>
-          
-          <dl className="detail-meta">
-            <div>
-              <dt>Area</dt>
-              <dd>{detail.area}</dd>
-            </div>
-            <div>
-              <dt>Direction</dt>
-              <dd>{detail.direction}</dd>
-            </div>
-            <div>
-              <dt>Value</dt>
-              <dd>{detail.value} {detail.unit}</dd>
-            </div>
-            <div>
-              <dt>Timestamp</dt>
-              <dd>{formatTime(detail.timestamp)}</dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd>{detail.source}</dd>
-            </div>
-          </dl>
-          
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
-            <button
-              type="button"
-              className="kind-filter-btn active"
-              onClick={onClose}
-            >
-              Stäng
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SourceDetailModal({ 
-  detail, 
-  onClose 
-}: { 
-  detail: SourceDetail | null; 
-  onClose: () => void; 
-}) {
-  if (!detail) return null;
-  
-  return (
-    <div className="detail-sheet" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="detail-sheet-card" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-heading detail-header">
-          <div>
-            <div className="section-kicker">KÄLLDETALJER</div>
-            <h2>Source Detail: {detail.name}</h2>
-          </div>
-          <button
-            type="button"
-            className="icon-button"
-            onClick={onClose}
-            aria-label="Stäng detaljvy"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        
-        <div className="detail-body">
-          <div className="detail-badges">
-            <span className={`status-badge ${detail.status}`}>
-              <span />
-              {detail.status}
-            </span>
-          </div>
-          
-          <p>Information about the {detail.name} data source</p>
-          
-          <dl className="detail-meta">
-            <div>
-              <dt>Name</dt>
-              <dd>{detail.name}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{detail.status}</dd>
-            </div>
-            <div>
-              <dt>Freshness</dt>
-              <dd>{detail.freshness}</dd>
-            </div>
-            <div>
-              <dt>Authentication</dt>
-              <dd>{detail.authenticationStatus}</dd>
-            </div>
-            {detail.lastSuccessfulUpdate && (
-              <div>
-                <dt>Last Successful Update</dt>
-                <dd>{formatTime(detail.lastSuccessfulUpdate)}</dd>
-              </div>
-            )}
-            {detail.errorInfo && (
-              <div>
-                <dt>Error Information</dt>
-                <dd>{detail.errorInfo}</dd>
-              </div>
-            )}
-            <div>
-              <dt>Documentation</dt>
-              <dd>
-                <a href={detail.documentationLink} target="_blank" rel="noreferrer">
-                  View Documentation
-                </a>
-              </dd>
-            </div>
-          </dl>
-          
-          <h3>Available Datasets</h3>
-          <ul>
-            {detail.datasets.map((dataset, index) => (
-              <li key={index}>{dataset}</li>
-            ))}
-          </ul>
-          
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
-            <button
-              type="button"
-              className="kind-filter-btn active"
-              onClick={onClose}
-            >
-              Stäng
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default EnergyDashboard

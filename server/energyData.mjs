@@ -1,6 +1,6 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
 import { getSvkEnergyData } from './svkAdapter.mjs'
-import { getNordPoolDayAheadPricesForAllAreas } from './nordpoolAdapter.mjs'
+import { getNordPoolDayAheadPricesForAllAreas } from './nordPoolAdapter.mjs'
 
 const areas = {
   se: {
@@ -103,15 +103,16 @@ function field(value, key) {
   return found.length ? found[0] : undefined
 }
 
-function utcParameter(date) {
-  return date.toISOString().replace(/[-:]/g, '').slice(0, 12)
+export function utcParameter(date) {
+  return date.toISOString().replace(/[-:T]/g, '').slice(0, 12)
 }
 
-function intervalFor(period, now) {
+export function intervalFor(period, now) {
   const durations = { '24h': 24, '7d': 24 * 7, '30d': 24 * 30 }
   const hours = durations[period]
   if (!hours) throw new Error('Unsupported energy period.')
   const end = new Date(now)
+  end.setUTCMinutes(0, 0, 0)
   const start = new Date(end.getTime() - hours * 60 * 60 * 1000)
   return { start: utcParameter(start), end: utcParameter(end), startDate: start, endDate: end }
 }
@@ -158,8 +159,13 @@ function readPointValue(point) {
 export function parseEntsoeXml(xml, dataType) {
   const validation = XMLValidator.validate(xml)
   if (validation !== true) throw new Error('ENTSO-E returned invalid XML.')
-  const document = parser.parse(xml).Publication_MarketDocument
-  if (!document) throw new Error('ENTSO-E response did not contain a publication document.')
+  const parsedObj = parser.parse(xml)
+  const document = parsedObj.GL_MarketDocument
+    ?? parsedObj.Publication_MarketDocument
+    ?? parsedObj.TransmissionNetwork_MarketDocument
+    ?? parsedObj.Energy_MarketDocument
+    ?? Object.values(parsedObj).find((val) => val && typeof val === 'object' && val.TimeSeries)
+  if (!document) throw new Error('ENTSO-E response did not contain a publication or market document.')
   const points = []
 
   for (const series of asArray(document.TimeSeries)) {
@@ -208,7 +214,21 @@ function dataset(status, dataType, unit, points = [], note = null) {
 async function requestEntsoe({ token, documentType, processType, area, from, to, interval, dataType, unit, fetchImpl }) {
   const url = buildEntsoeUrl({ documentType, processType, area, start: interval.start, end: interval.end, from, to, token })
   const response = await fetchImpl(url, { headers: { Accept: 'application/xml' }, signal: AbortSignal.timeout(12000) })
-  if (!response.ok) throw new Error(`ENTSO-E returned HTTP ${response.status}.`)
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => '')
+    let reasonText = ''
+    try {
+      const parsedError = parser.parse(errorBody)
+      const reason = parsedError?.Acknowledgement_MarketDocument?.Reason
+      if (reason) {
+        reasonText = reason.text ?? (Array.isArray(reason) ? reason.map((r) => r.text).join('; ') : '')
+      }
+    } catch {
+      // fallback
+    }
+    const detail = reasonText ? `: ${reasonText}` : '.'
+    throw new Error(`ENTSO-E returned HTTP ${response.status}${detail}`)
+  }
   const parsed = parseEntsoeXml(await response.text(), dataType)
   const normalizedUnit = normalizeEntsoeUnit(parsed, dataType, unit)
   return parsed.points.length
