@@ -45,7 +45,7 @@ export interface EnergyResponse {
     entsoe: { status: string; label: string; endpoint: string; lastUpdated: string | null };
     smhi: { status: string; label: string };
     svkNotices: { status: string; label: string; url: string; note: string };
-    nordPool: { status: string; label: string; note: string };
+    elpris?: { status: string; label: string; endpoint: string; url?: string; lastUpdated: string | null; note?: string };
   };
   datasets: {
     dayAheadPrices: EnergyDataset;
@@ -54,10 +54,10 @@ export interface EnergyResponse {
     actualLoad: EnergyDataset;
     loadForecast: EnergyDataset;
     crossBorderFlows: { neighbor: string; export: EnergyDataset; import: EnergyDataset }[];
-    nordPoolPrices?: EnergyDataset;
     svkEvents?: EnergyDataset;
   };
   weather: WeatherObservation[];
   gridDisturbances: { status: string; value: null; note: string };
   retrievedAt: string;
+  elpris?: Record<string, any> | null;
 }

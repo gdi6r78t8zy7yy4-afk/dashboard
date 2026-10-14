@@ -9,6 +9,8 @@ import { getEventsDashboard } from './eventsService.mjs'
 import { getTransportDashboard } from './transportService.mjs'
 // Import weather services
 import { getWeatherData, getLocationInfo } from './weather/weatherService.mjs'
+// Import gas and oil services
+import { handleGasOilRequest } from './gasOilRoutes.mjs'
 
 const port = Number(process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '127.0.0.1'
@@ -220,6 +222,11 @@ const server = createServer(async (request, response) => {
         message: 'Failed to search locations'
       }))
     }
+    return
+  }
+
+  // Gas and oil API routes
+  if (await handleGasOilRequest(url, response)) {
     return
   }
 

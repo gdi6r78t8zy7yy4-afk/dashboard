@@ -67,7 +67,10 @@ describe('energy data adapter', () => {
     expect(result.datasets.actualGeneration.status).toBe('not_configured')
     expect(result.gridDisturbances.status).toBe('not_configured')
     expect(result.weather.every((item) => item.status === 'error')).toBe(true)
-    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    // ENTSO-E must never be contacted without a token (elpris and SMHI are attempted separately).
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes('web-api.tp.entsoe.eu')).length).toBe(0)
+    // Elpriset just nu is tried for all four zones and degrades to errors per zone.
+    expect(result.sources.elpris.status).toBe('error')
   })
 
   it('uses active SMHI stations and labels the returned values as observations', async () => {
@@ -86,7 +89,7 @@ describe('energy data adapter', () => {
     expect(result.weather[0].points[0]).toMatchObject({ value: 12.5, quality: 'G' })
     expect(result.sources.smhi.status).toBe('ok')
     expect(result.datasets.dayAheadPrices.status).toBe('not_configured')
-    expect(fetchImpl).toHaveBeenCalledTimes(6)
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes('opendata-download-metobs.smhi.se')).length).toBe(6)
   })
 
   it('integrates Svenska kraftnät CKAN API data (data.svk.se) into sources and flows', async () => {

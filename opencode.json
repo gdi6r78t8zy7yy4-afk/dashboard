@@ -9,10 +9,10 @@
         "baseURL": "http://127.0.0.1:1234/v1"
       },
       "models": {
-        "qwen/qwen3-coder-30b": {
-          "name": "Local Qwen",
+        "qwen/qwen3.8-27b": {
+          "name": "Qwen 3.8",
           "limit": {
-            "context": 200000,
+            "context": 262144,
             "output": 8192
           }
         }

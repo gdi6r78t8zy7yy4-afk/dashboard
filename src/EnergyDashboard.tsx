@@ -107,7 +107,7 @@ type EnergyResponse = {
     smhi: { status: string; label: string; lastUpdated?: string | null }
     svkNotices: { status: string; label: string; url: string; note: string; endpoint?: string }
     smhiForecast: { status: string; label: string; note: string }
-    nordpool?: { status: string; label: string; endpoint: string; lastUpdated: string | null; note?: string }
+    elpris?: { status: string; label: string; endpoint: string; url?: string; lastUpdated: string | null; note?: string }
   }
   datasets: {
     dayAheadPrices: Dataset
@@ -121,7 +121,7 @@ type EnergyResponse = {
   weather: WeatherObservation[]
   gridDisturbances: { status: string; value: null; note: string }
   retrievedAt: string
-  nordpool?: Record<string, any> | null
+  elpris?: Record<string, any> | null
 }
 
 const countryOptions = [
@@ -198,7 +198,7 @@ function PriceChart({
   emptyStatus,
   emptyNote,
   area,
-  nordpoolData
+  elprisData
 }: {
   title: string
   description: string
@@ -209,25 +209,25 @@ function PriceChart({
   emptyNote?: string | null
   area: string
   period?: string
-  nordpoolData?: Record<string, any> | null
+  elprisData?: Record<string, any> | null
 }) {
   const chart = makeChartRows(series)
   
-  // Get Nord Pool data if available
-  const nordpoolSeries = []
-  if (nordpoolData && nordpoolData[area]) {
-    const nordpool = nordpoolData[area]
-    if (nordpool && nordpool.data && nordpool.data.length > 0) {
-      const points = nordpool.data.map((point: any) => ({
+  // Get Elpriset just nu data if available
+  const elprisSeries = []
+  if (elprisData && elprisData[area]) {
+    const elpris = elprisData[area]
+    if (elpris && elpris.data && elpris.data.length > 0) {
+      const points = elpris.data.map((point: any) => ({
         timestamp: point.timestamp,
         value: point.value
       }))
-      nordpoolSeries.push({ name: 'Nord Pool Price', points })
+      elprisSeries.push({ name: 'Elpriset just nu', points })
     }
   }
 
   // Combine with existing series if available
-  const allSeries = [...series, ...nordpoolSeries]
+  const allSeries = [...series, ...elprisSeries]
   
   return (
     <article className="panel energy-chart-panel">
@@ -354,22 +354,22 @@ function SourceHealthSection({ sources, timezone }: { sources: EnergyResponse['s
           </div>
         )}
 
-        {/* Nord Pool */}
-        {sources.nordpool && (
+        {/* Elpriset just nu */}
+        {sources.elpris && (
           <div className="energy-source-health-card">
             <div className="energy-source-health-header">
-              <strong>Nord Pool</strong>
-              <small>Market data API</small>
+              <strong>Elpriset just nu</strong>
+              <small>Open price API</small>
             </div>
-            <p className="energy-source-health-desc">Day-ahead electricity prices for Swedish bidding zones.</p>
+            <p className="energy-source-health-desc">Current Swedish spot prices for bidding zones SE1–SE4 (quarter-hour resolution).</p>
             <div className="energy-source-health-meta">
               <div>
                 <span>Status</span>
-                <strong className="energy-status">{sources.nordpool.status}</strong>
+                <strong className="energy-status">{sources.elpris.status}</strong>
               </div>
               <div>
                 <span>Last update</span>
-                <strong>{formatTime(sources.nordpool.lastUpdated)}</strong>
+                <strong>{formatTime(sources.elpris.lastUpdated)}</strong>
               </div>
             </div>
           </div>
@@ -614,22 +614,24 @@ function EnergyDashboard() {
   // Calculate price statistics if available
   const priceStats = price ? calculatePriceStats(price.points) : null
   
-  // Check if Nord Pool data is available for current zone
-  const hasNordPoolData = !!(data?.nordpool && data.nordpool[zone] && data.nordpool[zone].data?.length > 0)
+  // Check if Elpriset just nu data is available for the current zone
+  const elprisZone = data?.elpris?.[zone]
+  const hasElPrisData = !!(elprisZone && elprisZone.data?.length > 0)
+  const currentSpot = elprisZone?.current ?? null
   
-  // Additional data for enhanced charts
-  const nordPoolPriceData = data?.nordpool
+  // Data for enhanced charts
+  const elPrisPriceData = data?.elpris
   
   // Get all Swedish zones for price comparison
   const allZones = ['SE1', 'SE2', 'SE3', 'SE4']
   
-  // Prepare price data for each zone if available
+  // Prepare per-zone price data: prefer Elpriset just nu (per zone), fall back to ENTSO-E day-ahead
   const priceDataByZone = allZones.map(zoneName => {
-    const zonePrice = data?.datasets.dayAheadPrices
+    const zonePrices = data?.elpris?.[zoneName]?.data
     return {
       zone: zoneName,
-      priceData: zonePrice?.points || [],
-      unit: zonePrice?.unit || 'EUR/MWh'
+      priceData: zonePrices?.length ? zonePrices : (data?.datasets.dayAheadPrices?.points || []),
+      unit: 'EUR/MWh'
     }
   })
 
@@ -684,6 +686,11 @@ function EnergyDashboard() {
 
           <div className="energy-metrics">
             <LatestMetric label="Day-ahead market price" dataset={data.datasets.dayAheadPrices} timezone={timezone} />
+            <article className="energy-metric">
+              <span>Current spot price ({zone})</span>
+              <strong>{currentSpot ? (currentSpot.sekPerKWh != null ? `${Number(currentSpot.sekPerKWh).toFixed(3)} SEK/kWh` : `${Number(currentSpot.value).toFixed(1)} EUR/MWh`) : 'No data'}</strong>
+              <small>{currentSpot ? `≈ ${Number(currentSpot.value).toFixed(1)} EUR/MWh · ${formatTime(currentSpot.timestamp, timezone)}` : 'Elpriset just nu.se'}</small>
+            </article>
             <LatestMetric label="Latest measured load" dataset={data.datasets.actualLoad} timezone={timezone} />
             <LatestMetric label="Latest measured generation" dataset={data.datasets.actualGeneration} timezone={timezone} />
             {data.svk?.reserves && (
@@ -735,7 +742,7 @@ function EnergyDashboard() {
               emptyNote={price?.note}
               area={zone}
               period={period}
-              nordpoolData={data.nordpool}
+              elprisData={data.elpris}
             />
             
             <EnergyChart title="Generation by production type" description="ACTUAL AND FORECAST VALUES ARE SEPARATE SERIES" unit={actualGeneration?.unit ?? 'MW'} series={generationSeries} timezone={timezone} emptyStatus={actualGeneration?.status} emptyNote={actualGeneration?.note} />
@@ -800,14 +807,14 @@ function EnergyDashboard() {
               </div>
             )}
             
-            {/* Nord Pool Price Comparison */}
-            {hasNordPoolData && (
+            {/* Elpriset just nu – spot price for selected zone */}
+            {hasElPrisData && (
               <div className="energy-production-mix">
-                <h3>Nord Pool Price Comparison</h3>
+                <h3>Elpriset just nu – spotpris ({zone})</h3>
                 <div className="energy-chart">
                   <ResponsiveContainer width="100%" height={200}>
                     <LineChart 
-                      data={(data?.nordpool?.[zone]?.data || []).map((point: any) => ({
+                      data={(elprisZone?.data || []).map((point: any) => ({
                         timestamp: point.timestamp,
                         value: point.value
                       }))} 
@@ -840,6 +847,7 @@ function EnergyDashboard() {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
+                <small style={{ fontSize: '9px', color: '#889189' }}>{elprisZone?.note}</small>
               </div>
             )}
           </div>
@@ -1020,15 +1028,15 @@ function EnergyDashboard() {
               )}
               <div className="energy-source-row"><span>{data.sources.entsoe.label}</span><Status value={data.sources.entsoe.status} /></div>
               <div className="energy-source-row"><span>{data.sources.smhi.label}</span><Status value={data.sources.smhi.status} /></div>
-              {data.sources.nordpool && (
-                <div className="energy-source-row"><span>{data.sources.nordpool.label}</span><Status value={data.sources.nordpool.status} /></div>
+              {data.sources.elpris && (
+                <div className="energy-source-row"><span>{data.sources.elpris.label}</span><Status value={data.sources.elpris.status} /></div>
               )}
               <div className="energy-source-row"><span>Latest ENTSO-E data</span><strong>{formatTime(data.sources.entsoe.lastUpdated)}</strong></div>
               <div className="energy-source-row"><span>Retrieved from backend</span><strong>{formatTime(data.retrievedAt)}</strong></div>
               <a className="source-link" href="https://data.svk.se" target="_blank" rel="noreferrer">Svenska kraftnät Dataportal (data.svk.se) <ArrowUpRight size={14} /></a>
               <a className="source-link" href="https://transparency.entsoe.eu/" target="_blank" rel="noreferrer">ENTSO-E Transparency Platform <ArrowUpRight size={14} /></a>
-              {data.sources.nordpool && (
-                <a className="source-link" href={data.sources.nordpool.endpoint} target="_blank" rel="noreferrer">Nord Pool Market Data API <ArrowUpRight size={14} /></a>
+              {data.sources.elpris && (
+                <a className="source-link" href={data.sources.elpris.url ?? data.sources.elpris.endpoint} target="_blank" rel="noreferrer">Elpriset just nu.se API <ArrowUpRight size={14} /></a>
               )}
             </article>
           </div>
@@ -1049,7 +1057,7 @@ function EnergyDashboard() {
                 emptyNote={price?.note}
                 area={zone}
                 period={period}
-                nordpoolData={nordPoolPriceData}
+                elprisData={elPrisPriceData}
               />
               
               {priceStats && (
@@ -1241,7 +1249,7 @@ function PriceComparisonChart({
   emptyStatus,
   emptyNote,
   area,
-  nordpoolData
+  elprisData
 }: {
   title: string
   description: string
@@ -1252,25 +1260,25 @@ function PriceComparisonChart({
   emptyNote?: string | null
   area: string
   period?: string
-  nordpoolData?: Record<string, any> | null
+  elprisData?: Record<string, any> | null
 }) {
   const chart = makeChartRows(series)
   
-  // Get Nord Pool data if available
-  const nordpoolSeries = []
-  if (nordpoolData && nordpoolData[area]) {
-    const nordpool = nordpoolData[area]
-    if (nordpool && nordpool.data && nordpool.data.length > 0) {
-      const points = nordpool.data.map((point: any) => ({
+  // Get Elpriset just nu data if available
+  const elprisSeries = []
+  if (elprisData && elprisData[area]) {
+    const elpris = elprisData[area]
+    if (elpris && elpris.data && elpris.data.length > 0) {
+      const points = elpris.data.map((point: any) => ({
         timestamp: point.timestamp,
         value: point.value
       }))
-      nordpoolSeries.push({ name: 'Nord Pool Price', points })
+      elprisSeries.push({ name: 'Elpriset just nu', points })
     }
   }
 
   // Combine with existing series if available
-  const allSeries = [...series, ...nordpoolSeries]
+  const allSeries = [...series, ...elprisSeries]
   
   return (
     <article className="panel energy-chart-panel">

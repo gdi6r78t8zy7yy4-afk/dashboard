@@ -30,6 +30,7 @@ import { siteConfig } from './config/siteConfig'
 import { summarizeStatuses } from './services/statusSummary'
 import type { ServiceStatus, StatusLevel } from './services/statusSummary'
 import './styles/weather.css'
+import './styles/gas-oil.css'
 
 const EnergyDashboard = lazy(() => import('./EnergyDashboard'))
 const TelecomDashboard = lazy(() => import('./TelecomDashboard'))
@@ -38,6 +39,7 @@ const CyberDashboard = lazy(() => import('./CyberDashboard'))
 const WorldEventsDashboard = lazy(() => import('./WorldEventsDashboard'))
 const TransportDashboard = lazy(() => import('./TransportDashboard'))
 const WeatherDashboard = lazy(() => import('./WeatherDashboard'))
+const GasOilDashboard = lazy(() => import('./GasOilDashboard'))
 
 type DashboardId =
   | 'overview'
@@ -51,6 +53,7 @@ type DashboardId =
   | 'maritime'
   | 'power'
   | 'energy'
+  | 'gas-oil'
   | 'datacenters'
   | 'telecom'
   | 'networks'
@@ -207,6 +210,7 @@ const dashboards: { id: DashboardId; label: string; icon: LucideIcon; group: str
   { id: 'maritime', label: 'Sjöfart & farleder', icon: Ship, group: 'TRANSPORT' },
   { id: 'energy', label: 'Gas- & oljelager', icon: Waves, group: 'ENERGI' },
   { id: 'datacenters', label: 'Datacenter', icon: Database, group: 'DIGITAL INFRASTRUKTUR' },
+  { id: 'gas-oil', label: 'Gas & Oljor', icon: Waves, group: 'ENERGI' },
 ]
 
 const sectorIcons: Record<string, LucideIcon> = {
@@ -999,6 +1003,11 @@ function App() {
           {activeDashboard === 'weather' && (
             <Suspense fallback={<p className="data-message" role="status">Laddar väderdata…</p>}>
               <WeatherDashboard />
+            </Suspense>
+          )}
+          {activeDashboard === 'gas-oil' && (
+            <Suspense fallback={<p className="data-message" role="status">Laddar gas- och oljedata…</p>}>
+              <GasOilDashboard />
             </Suspense>
           )}
 

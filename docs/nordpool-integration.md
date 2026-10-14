@@ -1,5 +1,12 @@
 # Nord Pool Market Data Integration
 
+> **Superseded for current prices:** the dashboard now uses the open
+> [Elpriset just nu.se](https://www.elprisetjustnu.se) API for current Swedish
+> spot prices instead of the Nord Pool Market Data API. See
+> [elpris-integration.md](./elpris-integration.md). The Nord Pool adapter
+> (`server/nordPoolAdapter.mjs`) remains in the codebase but is no longer
+> wired into the energy service.
+
 This document describes the integration of Nord Pool market data into the Northwatch dashboard energy section.
 
 ## Integration Overview

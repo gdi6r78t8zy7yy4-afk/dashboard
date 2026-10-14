@@ -453,12 +453,13 @@ export async function getTransportDashboard({
   mode = 'all',
   region = 'se',
   period = '24h',
+  apiKey = process.env.TRAFIKVERKET_API_KEY,
   fetchImpl = fetch,
   now = new Date(),
 } = {}) {
   const [roadData, railData, aviationData] = await Promise.all([
-    getTransportRoadData({ fetchImpl, now }),
-    getTransportRailData({ fetchImpl, now }),
+    getTransportRoadData({ apiKey, fetchImpl, now }),
+    getTransportRailData({ apiKey, fetchImpl, now }),
     getTransportAviationData({ fetchImpl, now }),
   ])
 
