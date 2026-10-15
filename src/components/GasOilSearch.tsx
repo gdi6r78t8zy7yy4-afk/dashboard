@@ -39,7 +39,7 @@ export const GasOilSearch = ({ onSelect }: GasOilSearchProps) => {
   const [nav, setNav] = useState<SearchNavState>(() => createSearchNav([]))
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const listboxRef = useRef<HTMLUListElement>(null)
+  const listboxRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 

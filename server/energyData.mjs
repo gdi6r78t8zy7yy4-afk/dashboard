@@ -1,6 +1,14 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
 import { getSvkEnergyData } from './svkAdapter.mjs'
 import { getElPrisPricesForAllAreas } from './elPrisAdapter.mjs'
+import { createTtlCache } from './cache.mjs'
+
+// ENTSO-E, Svenska kraftnät, Elpris and SMHI are all pulled for one
+// getEnergyData call; cache the composed result per zone/period for 15 minutes.
+const energyCache = createTtlCache(15 * 60 * 1000, { maxEntries: 200 })
+export function clearEnergyCache() {
+  energyCache.clear()
+}
 
 const areas = {
   se: {
@@ -292,9 +300,15 @@ async function fetchWeatherObservation(parameter, label, unit, coordinates, fetc
 }
 
 /** @param {{ country?: string, zone?: string, period?: string, fetchImpl?: typeof fetch, token?: string, now?: Date, enableSvk?: boolean }} options */
-export async function getEnergyData({ country = 'se', zone, period = '24h', fetchImpl = fetch, token = process.env.ENTSOE_API_TOKEN, now = new Date(), enableSvk = true } = {}) {
+export async function getEnergyData({ country = 'se', zone, period = '24h', fetchImpl = fetch, token = process.env.ENTSOE_API_TOKEN, now = new Date(), enableSvk = true, forceRefresh = false } = {}) {
   const area = getEnergyArea(country, zone)
   const interval = intervalFor(period, now)
+
+  const cacheKey = `energy:${country}:${zone ?? ''}:${period}`
+  if (!forceRefresh) {
+    const cached = energyCache.get(cacheKey)
+    if (cached) return { ...cached, cached: true }
+  }
   const zoneEic = area.eic
   const shared = { token, interval, fetchImpl }
   const queries = {
@@ -390,7 +404,7 @@ export async function getEnergyData({ country = 'se', zone, period = '24h', fetc
   
   const hasLiveValues = hasEntsoeValues || (svkData && svkData.status === 'ok') || (elprisStatus === 'ok')
 
-  return {
+  const result = {
     mode: hasLiveValues ? 'live' : 'partial',
     market: { country, countryLabel: area.countryLabel, zone: area.zone, eic: area.eic, period, timezone: area.timezone, start: interval.startDate.toISOString(), end: interval.endDate.toISOString() },
     sources: {
@@ -432,4 +446,6 @@ export async function getEnergyData({ country = 'se', zone, period = '24h', fetc
     retrievedAt: new Date(now).toISOString(),
     elpris: elprisData,
   }
+  energyCache.set(cacheKey, result)
+  return result
 }

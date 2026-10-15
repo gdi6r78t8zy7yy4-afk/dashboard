@@ -27,14 +27,17 @@ interface GasOilMapLayer {
 }
 
 interface GasOilMapFeature {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   type: 'country' | 'field' | 'terminal' | 'pipeline' | 'storage' | 'coordinates';
   commodity?: string;
   indicator?: string;
   value?: number;
   unit?: string;
   coordinates?: [number, number];
+  /** Raw click coordinates (type 'coordinates'). */
+  lat?: number;
+  lng?: number;
   country?: string;
   source?: string;
   lastUpdated?: string;
@@ -43,7 +46,13 @@ interface GasOilMapFeature {
 }
 
 // Mock country data for demonstration
-const MOCK_COUNTRY_DATA = {
+interface MockCountryEntry {
+  value: number
+  unit: string
+  source: string
+}
+
+const MOCK_COUNTRY_DATA: Record<string, Record<string, MockCountryEntry>> = {
   production: {
     'United States': { value: 12000, unit: 'barrels/day', source: 'EIA' },
     'Saudi Arabia': { value: 10000, unit: 'barrels/day', source: 'Saudi Aramco' },
@@ -86,13 +95,11 @@ const MOCK_COUNTRY_DATA = {
 
 const GasOilMap = ({ 
   onFeatureSelect,
-  selectedFeature,
   commodity = 'crude_oil',
   indicator = 'production',
   focus
 }: {
   onFeatureSelect?: (feature: GasOilMapFeature) => void
-  selectedFeature?: GasOilMapFeature | null
   commodity?: string
   indicator?: string
   /** When set (and the token changes), the map flies to this location. */
@@ -110,49 +117,56 @@ const GasOilMap = ({
   ])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedLayer, setSelectedLayer] = useState<string>('production')
   const [timePeriod, setTimePeriod] = useState('24h')
   const [legend, setLegend] = useState<{label: string; color: string}[]>([])
   const [countryData, setCountryData] = useState<Record<string, any>>({})
   const [markers, setMarkers] = useState<L.Marker[]>([])
   const [lines, setLines] = useState<L.Polyline[]>([])
   const [selectedMarker, setSelectedMarker] = useState<L.Marker | null>(null)
-  
+
+  // Keep the latest callback in a ref so the map is created exactly once
+  // (the parent passes a fresh handler on every render).
+  const onFeatureSelectRef = useRef(onFeatureSelect)
+  useEffect(() => {
+    onFeatureSelectRef.current = onFeatureSelect
+  }, [onFeatureSelect])
+
   // Initialize map
   useEffect(() => {
     if (!mapRef.current) return
-    
+
     const map = L.map(mapRef.current, {
       center: [30, 15], // Center on Africa/Europe
       zoom: 2,
       zoomControl: true,
       attributionControl: true,
     })
-    
+
     // Add base tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map)
-    
+
     setMapInstance(map)
-    
+
     // Add click event listener for feature selection
     map.on('click', (e) => {
-      if (onFeatureSelect) {
+      const handler = onFeatureSelectRef.current
+      if (handler) {
         // For coordinate clicks, show nearby country data
-        onFeatureSelect({
+        handler({
           type: 'coordinates',
           lat: e.latlng.lat,
           lng: e.latlng.lng,
         })
       }
     })
-    
+
     // Cleanup on unmount
     return () => {
       map.remove()
     }
-  }, [onFeatureSelect])
+  }, [])
   
   // Load map data when layer changes or component mounts
   useEffect(() => {
@@ -172,11 +186,8 @@ const GasOilMap = ({
         setCountryData(data)
         
         // Update legend based on data
-        const values = Object.values(data).map(d => d.value as number)
+        const values = Object.values(data).map((d) => d.value)
         if (values.length > 0) {
-          const max = Math.max(...values)
-          const min = Math.min(...values)
-          
           // Create a color scale based on value range
           const colors = [
             { label: 'Low', color: '#f0f8ff' },
@@ -218,7 +229,7 @@ const GasOilMap = ({
       mapInstance.setView([30, 15], 2)
       // Remove selection highlighting
       if (selectedMarker) {
-        selectedMarker.getElement().classList.remove('selected-marker')
+        selectedMarker.getElement()?.classList.remove('selected-marker')
         setSelectedMarker(null)
       }
     }
@@ -226,17 +237,7 @@ const GasOilMap = ({
   
   // Handle feature selection
   const handleSelectFeature = (feature: GasOilMapFeature) => {
-    if (onFeatureSelect) {
-      onFeatureSelect(feature)
-    }
-  }
-  
-  // Clear selection
-  const clearSelection = () => {
-    if (selectedMarker) {
-      selectedMarker.getElement().classList.remove('selected-marker')
-      setSelectedMarker(null)
-    }
+    onFeatureSelectRef.current?.(feature)
   }
   
   // Render map based on selected layer
@@ -290,11 +291,11 @@ const GasOilMap = ({
           marker.on('click', () => {
             // Clear previous selection
             if (selectedMarker) {
-              selectedMarker.getElement().classList.remove('selected-marker')
+              selectedMarker.getElement()?.classList.remove('selected-marker')
             }
             
             // Highlight new selection
-            marker.getElement().classList.add('selected-marker')
+            marker.getElement()?.classList.add('selected-marker')
             setSelectedMarker(marker)
             
             handleSelectFeature({
@@ -327,7 +328,7 @@ const GasOilMap = ({
           [50, 10], // End point (Europe)
         ]
         
-        const line = L.polyline(pipelineCoords, {
+        const line = L.polyline(pipelineCoords as [number, number][], {
           color: '#387c65',
           weight: 4,
         }).addTo(mapInstance)
@@ -350,7 +351,7 @@ const GasOilMap = ({
             indicator: 'pipelines',
             value: 50000, // Example flow rate
             unit: 'barrels/day',
-            coordinates: midpoint,
+            coordinates: midpoint as [number, number],
             source: layer.source,
             status: 'ok',
             lastUpdated: new Date().toISOString(),

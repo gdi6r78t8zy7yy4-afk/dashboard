@@ -18,15 +18,6 @@ interface GasOilPricePoint {
   benchmark?: string
 }
 
-interface GasOilPriceDataset {
-  status: 'ok' | 'not_configured' | 'error' | 'missing' | 'stale'
-  dataType: string
-  unit: string
-  points: GasOilPricePoint[]
-  lastUpdated: string | null
-  note: string | null
-}
-
 interface GasOilPriceChartProps {
   data: GasOilPricePoint[]
   benchmark: string
@@ -39,7 +30,6 @@ const GasOilPriceChart = ({
   data, 
   benchmark, 
   unit, 
-  timePeriod,
   onPointSelect
 }: GasOilPriceChartProps) => {
   const [chartData, setChartData] = useState<any[]>([])
@@ -82,8 +72,6 @@ const GasOilPriceChart = ({
     if (!data || data.length < 2) return null
     
     const values = data.map(d => d.value)
-    const min = Math.min(...values)
-    const max = Math.max(...values)
     const avg = values.reduce((sum, val) => sum + val, 0) / values.length
     
     // Calculate change from first to last
@@ -129,7 +117,6 @@ const GasOilPriceChart = ({
   
   // Get latest value
   const latestPoint = data[data.length - 1]
-  const firstPoint = data[0]
   
   return (
     <div className="gas-oil-price-chart">
@@ -161,7 +148,7 @@ const GasOilPriceChart = ({
             tickFormatter={(value) => value.toFixed(2)}
           />
           <Tooltip 
-            formatter={(value, name) => [Number(value).toFixed(2), 'Price']}
+            formatter={(value, _name) => [Number(value).toFixed(2), 'Price']}
             labelFormatter={(label) => `Time: ${label}`}
           />
           <Legend />
@@ -173,14 +160,11 @@ const GasOilPriceChart = ({
             dot={{ r: 4 }} 
             activeDot={{ r: 6 }} 
             name={benchmark}
-            onClick={(data) => {
-              if (onPointSelect && data.payload) {
-                const point = data.payload
-                // Find the original point by timestamp
-                const originalPoint = data.find((p: any) => p.timestamp === point.timestamp)
-                if (originalPoint) {
-                  onPointSelect(originalPoint)
-                }
+            onClick={(state: unknown) => {
+              if (!onPointSelect) return
+              const point = (state as { payload?: GasOilPricePoint } | null)?.payload
+              if (point?.timestamp && point.value !== undefined) {
+                onPointSelect(point)
               }
             }}
           />

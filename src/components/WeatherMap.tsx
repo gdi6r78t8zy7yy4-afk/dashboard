@@ -1,65 +1,77 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import type { SelectedLocation } from '../types/weather'
 
-const WeatherMap = ({ 
-  center = [57.7, 12.0], 
-  zoom = 4,
-  onLocationSelect,
-  selectedLocation,
-  weatherData
-}) => {
-  const mapRef = useRef(null)
-  const [mapInstance, setMapInstance] = useState(null)
-  const markerRef = useRef(null)
+interface WeatherMapProps {
+  center?: [number, number]
+  zoom?: number
+  onLocationSelect?: (lat: number, lon: number, name?: string) => void
+  selectedLocation?: SelectedLocation | null
+}
+
+const WeatherMap = ({ center = [57.7, 12.0], zoom = 4, onLocationSelect, selectedLocation }: WeatherMapProps) => {
+  const mapRef = useRef<HTMLDivElement | null>(null)
+  const mapInstanceRef = useRef<L.Map | null>(null)
+  const markerRef = useRef<L.Marker | null>(null)
+
+  // Keep the latest callback in a ref so the map is created exactly once.
+  const onLocationSelectRef = useRef(onLocationSelect)
+  useEffect(() => {
+    onLocationSelectRef.current = onLocationSelect
+  }, [onLocationSelect])
 
   useEffect(() => {
-    // Initialize map if not already initialized
-    if (!mapInstance && mapRef.current) {
+    if (mapRef.current && !mapInstanceRef.current) {
       const map = L.map(mapRef.current).setView(center, zoom)
-      
+
       // Add base tile layer
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(map)
-      
-      setMapInstance(map)
-      
+
+      mapInstanceRef.current = map
+
       // Add click event listener
-      map.on('click', (e) => {
-        if (onLocationSelect) {
-          onLocationSelect(e.latlng.lat, e.latlng.lng)
+      map.on('click', (e: L.LeafletMouseEvent) => {
+        if (onLocationSelectRef.current) {
+          onLocationSelectRef.current(e.latlng.lat, e.latlng.lng)
         }
       })
     }
 
     return () => {
-      if (mapInstance) {
-        mapInstance.remove()
+      const map = mapInstanceRef.current
+      if (map) {
+        map.remove()
+        mapInstanceRef.current = null
+        markerRef.current = null
       }
     }
-  }, [center, zoom, mapInstance, onLocationSelect])
+  }, [center, zoom])
 
   // Update marker when selected location changes
   useEffect(() => {
-    if (mapInstance && selectedLocation) {
-      // Remove previous marker if exists
-      if (markerRef.current) {
-        mapInstance.removeLayer(markerRef.current)
-      }
-      
-      // Add new marker
-      const marker = L.marker([selectedLocation.lat, selectedLocation.lon]).addTo(mapInstance)
-      markerRef.current = marker
-      
-      // Center map on marker
-      mapInstance.setView([selectedLocation.lat, selectedLocation.lon], 8)
+    const map = mapInstanceRef.current
+    if (!map || !selectedLocation) return
+
+    // Remove previous marker if exists
+    if (markerRef.current) {
+      map.removeLayer(markerRef.current)
+      markerRef.current = null
     }
-  }, [mapInstance, selectedLocation])
+
+    // Add new marker
+    const marker = L.marker([selectedLocation.latitude, selectedLocation.longitude]).addTo(map)
+    markerRef.current = marker
+
+    // Center map on marker
+    map.setView([selectedLocation.latitude, selectedLocation.longitude], 8)
+  }, [selectedLocation])
 
   return (
-    <div 
-      ref={mapRef} 
+    <div
+      ref={mapRef}
       className="weather-map-container"
       style={{ height: '100%', width: '100%' }}
     />

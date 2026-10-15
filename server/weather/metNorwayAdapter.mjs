@@ -3,9 +3,18 @@
  * Documentation: https://api.met.no/
  */
 
-import { fetch } from 'undici'
+import { createTtlCache } from '../cache.mjs'
+
+// api.met.no asks clients to cache results; keep 10 minutes per coordinate.
+const metNorwayCache = createTtlCache(10 * 60 * 1000, { maxEntries: 500 })
 
 export async function fetchMetNorwayWeather(lat, lon, options = {}) {
+  const cacheKey = `metnorway:${lat.toFixed(3)},${lon.toFixed(3)}`
+  if (!options.forceRefresh) {
+    const cached = metNorwayCache.get(cacheKey)
+    if (cached) return { ...cached, cached: true }
+  }
+
   try {
     // Build the MET Norway API URL
     const baseUrl = 'https://api.met.no/weatherapi/locationforecast/2.0/compact'
@@ -17,10 +26,10 @@ export async function fetchMetNorwayWeather(lat, lon, options = {}) {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'User-Agent': 'Infrastructure-Watch/1.0',
+        'User-Agent': 'Northwatch/1.0 (infrastructure-monitoring dashboard)',
         'Accept': 'application/json'
       },
-      timeout: 10000 // 10 second timeout
+      signal: AbortSignal.timeout(10000) // 10 second timeout
     })
 
     if (!response.ok) {
@@ -30,7 +39,11 @@ export async function fetchMetNorwayWeather(lat, lon, options = {}) {
     const data = await response.json()
     
     // Parse and normalize the data
-    return normalizeMetNorwayData(data, lat, lon)
+    const result = normalizeMetNorwayData(data, lat, lon)
+    if (result.current?.status === 'ok' || result.current?.points.length > 0) {
+      metNorwayCache.set(cacheKey, result)
+    }
+    return result
   } catch (error) {
     console.error('Error fetching MET Norway weather data:', error)
     // Return error status instead of throwing to allow fallback

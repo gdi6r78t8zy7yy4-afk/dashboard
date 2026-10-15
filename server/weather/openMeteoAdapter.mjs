@@ -3,9 +3,18 @@
  * Documentation: https://open-meteo.com/
  */
 
-import { fetch } from 'undici'
+import { createTtlCache } from '../cache.mjs'
+
+/** Open-Meteo free tier allows ~10k calls/day; cache per rounded location for 10 minutes. */
+const openMeteoCache = createTtlCache(10 * 60 * 1000, { maxEntries: 500 })
 
 export async function fetchOpenMeteoWeather(lat, lon, options = {}) {
+  const cacheKey = `openmeteo:${lat.toFixed(3)},${lon.toFixed(3)}`
+  if (!options.forceRefresh) {
+    const cached = openMeteoCache.get(cacheKey)
+    if (cached) return { ...cached, cached: true }
+  }
+
   try {
     // Build the Open-Meteo API URL
     const baseUrl = 'https://api.open-meteo.com/v1/forecast'
@@ -26,9 +35,9 @@ export async function fetchOpenMeteoWeather(lat, lon, options = {}) {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'User-Agent': 'Infrastructure-Watch/1.0'
+        'User-Agent': 'Northwatch/1.0 (infrastructure-monitoring dashboard)'
       },
-      timeout: 10000 // 10 second timeout
+      signal: AbortSignal.timeout(10000) // 10 second timeout
     })
 
     if (!response.ok) {
@@ -38,7 +47,9 @@ export async function fetchOpenMeteoWeather(lat, lon, options = {}) {
     const data = await response.json()
     
     // Parse and normalize the data
-    return normalizeOpenMeteoData(data, lat, lon)
+    const result = normalizeOpenMeteoData(data, lat, lon)
+    openMeteoCache.set(cacheKey, result)
+    return result
   } catch (error) {
     console.error('Error fetching Open-Meteo weather data:', error)
     throw new Error(`Failed to fetch Open-Meteo weather data: ${error.message}`)

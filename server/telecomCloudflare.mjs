@@ -1,6 +1,14 @@
+import { createTtlCache } from './cache.mjs'
+
 const cloudflareBase = 'https://api.cloudflare.com/client/v4/radar'
 const cloudflareDocsUrl = 'https://developers.cloudflare.com/api/resources/radar/subresources/annotations/subresources/outages/methods/get/'
 const cloudflareStartUrl = 'https://developers.cloudflare.com/radar/get-started/first-request/'
+
+// Cloudflare Radar is rate limited; cache per region/period for 15 minutes.
+const cloudflareCache = createTtlCache(15 * 60 * 1000, { maxEntries: 200 })
+export function clearCloudflareCache() {
+  cloudflareCache.clear()
+}
 
 function periodDays(period) {
   return { '24h': 1, '7d': 7, '30d': 30 }[period] ?? 7
@@ -38,8 +46,8 @@ function makeSource({ state, retrievedAt, region, data, note, observedAt = null,
   }
 }
 
-/** @param {{ region: { id: string, period: string, countries: string[] }, token?: string, fetchImpl?: typeof fetch, now?: Date }} options */
-export async function getCloudflareOutages({ region, token = process.env.CLOUDFLARE_API_TOKEN, fetchImpl = fetch, now = new Date() }) {
+/** @param {{ region: { id: string, period: string, countries: string[] }, token?: string, fetchImpl?: typeof fetch, now?: Date, forceRefresh?: boolean }} options */
+export async function getCloudflareOutages({ region, token = process.env.CLOUDFLARE_API_TOKEN, fetchImpl = fetch, now = new Date(), forceRefresh = false }) {
   const retrievedAt = new Date(now).toISOString()
   if (!token) {
     return makeSource({
@@ -49,6 +57,12 @@ export async function getCloudflareOutages({ region, token = process.env.CLOUDFL
       data: [],
       note: `Not connected: set CLOUDFLARE_API_TOKEN to a server-side token with Account > Radar > Read. Radar data is available under CC BY-NC 4.0. See ${cloudflareStartUrl}`,
     })
+  }
+
+  const cacheKey = `cloudflare:${region.id}:${region.period}`
+  if (!forceRefresh) {
+    const cached = cloudflareCache.get(cacheKey)
+    if (cached) return { ...cached, cached: true }
   }
 
   const url = new URL(`${cloudflareBase}/annotations/outages`)
@@ -77,7 +91,7 @@ export async function getCloudflareOutages({ region, token = process.env.CLOUDFL
       return candidate && (!latest || candidate > latest) ? candidate : latest
     }, null)
 
-    return makeSource({
+    const okResult = makeSource({
       state: 'ok',
       retrievedAt,
       observedAt,
@@ -88,7 +102,18 @@ export async function getCloudflareOutages({ region, token = process.env.CLOUDFL
         ? 'Cloudflare Radar annotations are provider observations and may describe outages or anomalies. They do not establish cause, cyberattack, or local service impact without independent confirmation.'
         : 'No Cloudflare Radar outage annotations matched this area and period. This is not confirmation that every network service was available.',
     })
+    cloudflareCache.set(cacheKey, okResult)
+    return okResult
   } catch (error) {
+    const cached = cloudflareCache.peek(cacheKey)
+    if (cached) {
+      return {
+        ...cached,
+        state: 'stale',
+        cached: true,
+        note: `Cloudflare Radar is unreachable (${error instanceof Error ? error.message : 'unknown error'}); showing the last cached snapshot.`,
+      }
+    }
     return makeSource({
       state: 'error',
       retrievedAt,

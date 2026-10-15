@@ -1,23 +1,29 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import type { GeocodingResult } from '../types/weather'
 
-const LocationSearch = ({ onLocationSelect, className = '' }) => {
+interface LocationSearchProps {
+  onLocationSelect?: (latitude: number, longitude: number, name?: string) => void
+  className?: string
+}
+
+const LocationSearch = ({ onLocationSelect, className = '' }: LocationSearchProps) => {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
+  const [results, setResults] = useState<GeocodingResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Debounce search
   useEffect(() => {
-    let timeoutId
+    let timeoutId: ReturnType<typeof setTimeout>
     if (query.length >= 2) {
       setLoading(true)
       setError(null)
-      
+
       timeoutId = setTimeout(async () => {
         try {
           const response = await fetch(`/api/v1/weather/search?query=${encodeURIComponent(query)}`)
-          const data = await response.json()
-          
+          const data = (await response.json()) as { locations?: GeocodingResult[] }
+
           if (data.locations) {
             setResults(data.locations)
           } else {
@@ -39,7 +45,7 @@ const LocationSearch = ({ onLocationSelect, className = '' }) => {
     return () => clearTimeout(timeoutId)
   }, [query])
 
-  const handleSelect = (location) => {
+  const handleSelect = (location: GeocodingResult) => {
     setQuery('')
     setResults([])
     if (onLocationSelect) {
@@ -56,15 +62,15 @@ const LocationSearch = ({ onLocationSelect, className = '' }) => {
         placeholder="Search for a location..."
         className="location-search-input"
       />
-      
+
       {loading && <div className="search-loading">Searching...</div>}
-      
+
       {error && <div className="search-error">{error}</div>}
-      
+
       {results.length > 0 && (
         <div className="search-results">
           {results.map((result) => (
-            <div 
+            <div
               key={result.id}
               className="search-result-item"
               onClick={() => handleSelect(result)}

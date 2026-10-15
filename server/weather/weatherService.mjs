@@ -5,6 +5,10 @@
 import { fetchOpenMeteoWeather } from './openMeteoAdapter.mjs'
 import { fetchMetNorwayWeather } from './metNorwayAdapter.mjs'
 import { fetchGdacsAlerts } from './gdacsAdapter.mjs'
+import { createTtlCache } from '../cache.mjs'
+
+// Geocoding results rarely change; cache 24 hours per query.
+const geocodingCache = createTtlCache(24 * 60 * 60 * 1000, { maxEntries: 500 })
 
 /**
  * Get weather data for a specific location
@@ -116,9 +120,14 @@ export async function getWeatherData(lat, lon, options = {}) {
  * @returns {Promise<Object>} Location information
  */
 export async function getLocationInfo(query) {
+  const cacheKey = `geocode:${query.trim().toLowerCase()}`
+  if (query && geocodingCache.get(cacheKey)) {
+    return geocodingCache.get(cacheKey)
+  }
+
   try {
     // For this implementation, we'll use Open-Meteo's geocoding API
-    const baseUrl = 'https://api.open-meteo.com/v1/search'
+    const baseUrl = 'https://geocoding-api.open-meteo.com/v1/search'
     const params = new URLSearchParams({
       name: query,
       count: 20
@@ -129,9 +138,9 @@ export async function getLocationInfo(query) {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'User-Agent': 'Infrastructure-Watch/1.0'
+        'User-Agent': 'Northwatch/1.0 (infrastructure-monitoring dashboard)'
       },
-      timeout: 5000
+      signal: AbortSignal.timeout(5000)
     })
 
     if (!response.ok) {
@@ -157,10 +166,14 @@ export async function getLocationInfo(query) {
       }
     }
     
-    return {
+    const result = {
       locations,
       retrievedAt: new Date().toISOString()
     }
+    if (locations.length > 0 && query) {
+      geocodingCache.set(cacheKey, result)
+    }
+    return result
   } catch (error) {
     console.error('Error in location service:', error)
     return {

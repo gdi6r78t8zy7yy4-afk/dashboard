@@ -9,22 +9,12 @@ import {
   XAxis,
   YAxis
 } from 'recharts'
-import { TrendingUp, TrendingDown } from 'lucide-react'
 
 interface GasOilSupplyPoint {
   timestamp: string
   value: number
-  category?: string
+  category?: string | null
   country?: string
-}
-
-interface GasOilSupplyDataset {
-  status: 'ok' | 'not_configured' | 'error' | 'missing' | 'stale'
-  dataType: string
-  unit: string
-  points: GasOilSupplyPoint[]
-  lastUpdated: string | null
-  note: string | null
 }
 
 interface GasOilSupplyChartProps {
@@ -39,7 +29,6 @@ const GasOilSupplyChart = ({
   data, 
   indicator, 
   unit, 
-  timePeriod,
   onPointSelect
 }: GasOilSupplyChartProps) => {
   const [chartData, setChartData] = useState<any[]>([])
@@ -83,8 +72,6 @@ const GasOilSupplyChart = ({
     if (!data || data.length < 2) return null
     
     const values = data.map(d => d.value)
-    const min = Math.min(...values)
-    const max = Math.max(...values)
     const avg = values.reduce((sum, val) => sum + val, 0) / values.length
     
     // Calculate change from first to last
@@ -130,7 +117,6 @@ const GasOilSupplyChart = ({
   
   // Get latest value
   const latestPoint = data[data.length - 1]
-  const firstPoint = data[0]
   
   return (
     <div className="gas-oil-supply-chart">
@@ -155,7 +141,7 @@ const GasOilSupplyChart = ({
             tick={{ fontSize: 10 }}
           />
           <Tooltip 
-            formatter={(value, name) => [Number(value).toLocaleString(), 'Value']}
+            formatter={(value, _name) => [Number(value).toLocaleString(), 'Value']}
             labelFormatter={(label) => `Time: ${label}`}
           />
           <Legend />
@@ -163,14 +149,11 @@ const GasOilSupplyChart = ({
             dataKey="value" 
             fill="#387c65" 
             name={indicator}
-            onClick={(data) => {
-              if (onPointSelect && data.payload) {
-                const point = data.payload
-                // Find the original point by timestamp
-                const originalPoint = data.find((p: any) => p.timestamp === point.timestamp)
-                if (originalPoint) {
-                  onPointSelect(originalPoint)
-                }
+            onClick={(state: unknown) => {
+              if (!onPointSelect) return
+              const point = (state as { payload?: GasOilSupplyPoint } | null)?.payload
+              if (point?.timestamp && point.value !== undefined) {
+                onPointSelect(point)
               }
             }}
           />

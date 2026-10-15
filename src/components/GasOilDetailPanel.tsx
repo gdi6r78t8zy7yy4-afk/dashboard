@@ -11,6 +11,7 @@ import {
 import type { GasOilDetailRecord } from '../types/gas-oil'
 import {
   formatCommodity,
+  formatDateTime,
   formatIndicator,
   freshnessLabel,
 } from '../lib/gasOilDetail'
@@ -52,19 +53,6 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
       <strong>{children}</strong>
     </div>
   )
-}
-
-function formatDateTime(value: string | null | undefined): string | null {
-  if (!value) return null
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  return date.toLocaleString('en-GB', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 /**

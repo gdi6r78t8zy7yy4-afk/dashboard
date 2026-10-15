@@ -6,7 +6,7 @@
  * fields as if they were real observations.
  */
 
-import type { GasOilDetailRecord, GasOilPoint } from '../types/gas-oil'
+import type { GasOilDetailRecord, GasOilPoint, GasOilSource } from '../types/gas-oil'
 
 const COMMODITY_LABELS: Record<string, string> = {
   crude_oil: 'Crude Oil',
@@ -54,6 +54,22 @@ export function freshnessLabel(publishedAt: string | null | undefined, now: Date
   if (hours < 24) return `${hours} h ago`
   const days = Math.floor(hours / 24)
   return `${days} d ago`
+}
+
+/**
+ * Locale-formatted date/time for display, or null when no valid date.
+ */
+export function formatDateTime(value: string | null | undefined): string | null {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleString('en-GB', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function safeIso(value: string | null | undefined): string | null {
@@ -235,4 +251,36 @@ export function datasetSourceLabel(sources: { name: string; status: string }[] |
   if (!sources?.length) return null
   const ok = sources.find((s) => s.status === 'ok')
   return (ok ?? sources[0])?.name ?? null
+}
+
+/**
+ * Build a detail record for a data source row (from the /sources metadata).
+ */
+export function buildSourceRecord(source: GasOilSource): GasOilDetailRecord {
+  return {
+    id: `source-${source.id}`,
+    kind: 'source',
+    title: source.name,
+    typeLabel: 'Data source',
+    scope: 'Data provider',
+    commodity: null,
+    indicator: null,
+    value: null,
+    unit: null,
+    observedAt: source.lastUpdated,
+    publishedAt: source.lastUpdated,
+    period: null,
+    source: source.name,
+    recordRef: source.id,
+    sourceUrl: source.url || null,
+    status: source.status,
+    note: source.note ?? null,
+    definition: 'Upstream data provider for the gas and oil dashboard.',
+    methodology: source.requiresAuth
+      ? 'Requires an API key or token to be configured on the server.'
+      : 'Open data; no authentication required.',
+    history: null,
+    coordinates: null,
+    related: source.url ? [{ label: 'Open source site', action: 'source-url' }] : [],
+  }
 }

@@ -1,5 +1,13 @@
+import { createTtlCache } from './cache.mjs'
+
 const iodaBase = 'https://api.ioda.inetintel.cc.gatech.edu/v2'
 const iodaDocsUrl = 'https://api.ioda.inetintel.cc.gatech.edu/v2/docs'
+
+// IODA has four endpoints per country query; keep results for 15 minutes.
+const iodaCache = createTtlCache(15 * 60 * 1000, { maxEntries: 100 })
+export function clearIodaCache() {
+  iodaCache.clear()
+}
 
 function periodSeconds(period) {
   return { '24h': 24, '7d': 24 * 7, '30d': 24 * 30 }[period] * 60 * 60
@@ -62,8 +70,14 @@ export function parseIodaSignal(payload) {
   })
 }
 
-/** @param {{ country?: string, period?: string, fetchImpl?: typeof fetch, now?: Date }} options */
-export async function getIodaOutages({ country = 'SE', period = '7d', fetchImpl = fetch, now = new Date() } = {}) {
+/** @param {{ country?: string, period?: string, fetchImpl?: typeof fetch, now?: Date, forceRefresh?: boolean }} options */
+export async function getIodaOutages({ country = 'SE', period = '7d', fetchImpl = fetch, now = new Date(), forceRefresh = false } = {}) {
+  const cacheKey = `ioda:${country}:${period}`
+  if (!forceRefresh) {
+    const cached = iodaCache.get(cacheKey)
+    if (cached) return { ...cached, cached: true }
+  }
+
   const requestedAt = new Date(now).toISOString()
   const until = Math.floor(new Date(now).getTime() / 1000)
   const from = until - periodSeconds(period)
@@ -83,7 +97,7 @@ export async function getIodaOutages({ country = 'SE', period = '7d', fetchImpl 
   const observedAt = signal.at(-1)?.timestamp ?? null
   const state = successful.length === 0 ? 'error' : failures.length ? 'partial' : observedAt ? 'ok' : 'unavailable'
 
-  return {
+  const result = {
     state,
     provenance: {
       source: 'IODA Internet Outage Detection and Analysis',
@@ -102,4 +116,8 @@ export async function getIodaOutages({ country = 'SE', period = '7d', fetchImpl 
         ? 'IODA detects internet outage signals; it does not provide complete operator status or identify failed mobile towers.'
         : 'No IODA outage events or alerts were published for Sweden in this time window. This is not confirmation that all services were available.',
   }
+
+  // Cache everything except hard errors, so a full outage of IODA recovers quickly.
+  if (state !== 'error') iodaCache.set(cacheKey, result)
+  return result
 }

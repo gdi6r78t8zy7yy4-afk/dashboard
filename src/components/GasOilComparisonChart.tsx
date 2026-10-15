@@ -109,7 +109,7 @@ const GasOilComparisonChart = ({
             name="Value"
           />
           <Tooltip 
-            formatter={(value, name) => [Number(value).toLocaleString(), 'Value']}
+            formatter={(value, _name) => [Number(value).toLocaleString(), 'Value']}
             labelFormatter={(label) => `Date: ${label}`}
           />
           <Legend />
@@ -122,7 +122,7 @@ const GasOilComparisonChart = ({
       </ResponsiveContainer>
       
       <div className="chart-info">
-        <p>Regional comparison data showing {data.length} countries/regions.</p>
+        <p>Regional comparison data showing {data.length} countries/regions {unit ? `(${unit})` : ''}.</p>
       </div>
     </div>
   )

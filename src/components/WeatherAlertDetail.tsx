@@ -1,4 +1,11 @@
-const WeatherAlertDetail = ({ alert, onClose }) => {
+import type { WeatherAlert } from '../types/weather'
+
+interface WeatherAlertDetailProps {
+  alert: WeatherAlert | null
+  onClose: () => void
+}
+
+const WeatherAlertDetail = ({ alert, onClose }: WeatherAlertDetailProps) => {
   if (!alert) {
     return (
       <div className="weather-alert-detail">
@@ -17,16 +24,16 @@ const WeatherAlertDetail = ({ alert, onClose }) => {
         <h2>{alert.title}</h2>
         <button onClick={onClose} className="close-button">×</button>
       </div>
-      
+
       <div className="detail-content">
         <div className="alert-info">
           <div className="alert-meta">
             <span className={`severity ${alert.severity}`}>{alert.severity}</span>
-            <span>{alert.category}</span>
+            {alert.category && <span>{alert.category}</span>}
           </div>
-          
+
           <p className="alert-description">{alert.description}</p>
-          
+
           {alert.sourceUrl && (
             <div className="alert-source">
               <a href={alert.sourceUrl} target="_blank" rel="noopener noreferrer">
@@ -34,24 +41,26 @@ const WeatherAlertDetail = ({ alert, onClose }) => {
               </a>
             </div>
           )}
-          
+
           <div className="alert-timestamps">
             <div>
-              <strong>Start Time:</strong> {new Date(alert.startTime).toLocaleString()}
+              <strong>Start Time:</strong> {alert.startTime ? new Date(alert.startTime).toLocaleString() : 'Unknown'}
             </div>
             {alert.endTime && (
               <div>
                 <strong>End Time:</strong> {new Date(alert.endTime).toLocaleString()}
               </div>
             )}
-            <div>
-              <strong>Source:</strong> {alert.source}
-            </div>
+            {alert.source && (
+              <div>
+                <strong>Source:</strong> {alert.source}
+              </div>
+            )}
           </div>
-          
-          {alert.location.latitude && alert.location.longitude && (
+
+          {alert.location.latitude !== null && alert.location.longitude !== null && (
             <div className="alert-location">
-              <strong>Location:</strong> 
+              <strong>Location:</strong>
               Lat: {alert.location.latitude.toFixed(4)}, Lon: {alert.location.longitude.toFixed(4)}
             </div>
           )}

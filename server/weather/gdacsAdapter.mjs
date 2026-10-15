@@ -3,9 +3,18 @@
  * Website: https://www.gdacs.org/
  */
 
-import { fetch } from 'undici'
+import { createTtlCache } from '../cache.mjs'
+
+// Global alert list, not location specific; refresh at most every 30 minutes.
+const gdacsCache = createTtlCache(30 * 60 * 1000, { maxEntries: 4 })
 
 export async function fetchGdacsAlerts(options = {}) {
+  const cacheKey = `gdacs:alerts:${options.limit || 50}`
+  if (!options.forceRefresh) {
+    const cached = gdacsCache.get(cacheKey)
+    if (cached) return { ...cached, cached: true }
+  }
+
   try {
     // Build the GDACS API URL
     const baseUrl = 'https://api.gdacs.org/api/Alerts'
@@ -22,9 +31,9 @@ export async function fetchGdacsAlerts(options = {}) {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'User-Agent': 'Infrastructure-Watch/1.0'
+        'User-Agent': 'Northwatch/1.0 (infrastructure-monitoring dashboard)'
       },
-      timeout: 10000 // 10 second timeout
+      signal: AbortSignal.timeout(10000) // 10 second timeout
     })
 
     if (!response.ok) {
@@ -34,7 +43,11 @@ export async function fetchGdacsAlerts(options = {}) {
     const data = await response.json()
     
     // Parse and normalize the data
-    return normalizeGdacsData(data)
+    const result = normalizeGdacsData(data)
+    if (result.alerts.length > 0) {
+      gdacsCache.set(cacheKey, result)
+    }
+    return result
   } catch (error) {
     console.error('Error fetching GDACS alerts:', error)
     // Return empty alerts instead of throwing to allow fallback

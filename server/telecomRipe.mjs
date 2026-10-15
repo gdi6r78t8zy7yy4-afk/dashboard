@@ -1,5 +1,14 @@
+import { createTtlCache } from './cache.mjs'
+
 const ripeBase = 'https://stat.ripe.net/data'
 const ripeDocsUrl = 'https://stat.ripe.net/docs/data-api/ripestat-data-api'
+
+// RIPEstat has no published per-key rate budget; keep one response per
+// country/period for 15 minutes to stay well inside their limits.
+const ripeCache = createTtlCache(15 * 60 * 1000, { maxEntries: 100 })
+export function clearRipeCache() {
+  ripeCache.clear()
+}
 
 function numeric(value) {
   const result = Number(value)
@@ -35,7 +44,13 @@ async function requestJson(url, fetchImpl) {
   return payload
 }
 
-export async function getRipeRouting({ country = 'SE', period = '7d', fetchImpl = fetch, now = new Date() } = {}) {
+export async function getRipeRouting({ country = 'SE', period = '7d', fetchImpl = fetch, now = new Date(), forceRefresh = false } = {}) {
+  const cacheKey = `ripe:${country}:${period}`
+  if (!forceRefresh) {
+    const cached = ripeCache.get(cacheKey)
+    if (cached) return { ...cached, cached: true }
+  }
+
   const requestedAt = new Date(now).toISOString()
   const end = new Date(now)
   const start = new Date(end.getTime() - periodDays(period) * 24 * 60 * 60 * 1000)
@@ -57,7 +72,7 @@ export async function getRipeRouting({ country = 'SE', period = '7d', fetchImpl 
     const observedAt = latest?.date ?? asnsResult.data?.query_time ?? null
     const stale = observedAt ? Date.parse(requestedAt) - Date.parse(observedAt) > 8 * 24 * 60 * 60 * 1000 : true
 
-    return {
+    const result = {
       state: stale ? 'stale' : 'ok',
       provenance: {
         source: 'RIPEstat Data API / RIPE RIS',
@@ -72,7 +87,21 @@ export async function getRipeRouting({ country = 'SE', period = '7d', fetchImpl 
       data: { history, latest, registeredAsns: numeric(asnCountry?.stats?.registered), routedAsns: numeric(asnCountry?.stats?.routed) },
       note: 'RIPE RIS observes BGP announcements and routing visibility. These values do not measure mobile network availability or user reachability.',
     }
+
+    ripeCache.set(cacheKey, result)
+    return result
   } catch (error) {
+    // Serve the last known good snapshot when a refresh fails.
+    const cached = ripeCache.peek(cacheKey)
+    if (cached) {
+      return {
+        ...cached,
+        state: 'stale',
+        cached: true,
+        note: `RIPEstat is unreachable (${error instanceof Error ? error.message : 'unknown error'}); showing the last cached snapshot.`,
+      }
+    }
+
     return {
       state: 'error',
       provenance: {

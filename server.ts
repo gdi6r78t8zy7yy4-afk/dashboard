@@ -9,6 +9,8 @@ import { getInternetDashboard } from './server/internetService.mjs'
 import { getCyberDashboard, getCyberCveDetails } from './server/cyberService.mjs'
 import { getEventsDashboard } from './server/eventsService.mjs'
 import { getTransportDashboard } from './server/transportService.mjs'
+import { registerGasOilRoutes } from './server/gasOilRoutes.mjs'
+import { getWeatherData, getLocationInfo } from './server/weather/weatherService.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -121,6 +123,41 @@ async function startServer() {
       res.status(500).json({ error: error instanceof Error ? error.message : 'Kunde inte hämta transportdata.' })
     }
   })
+
+  // Weather API routes
+  app.get('/api/v1/weather', async (req: Request, res: Response) => {
+    const lat = typeof req.query.lat === 'string' ? req.query.lat : undefined
+    const lon = typeof req.query.lon === 'string' ? req.query.lon : undefined
+    const timezone = typeof req.query.timezone === 'string' ? req.query.timezone : undefined
+    if (!lat || !lon) {
+      res.status(400).json({
+        error: 'Missing required parameters',
+        message: 'Latitude (lat) and longitude (lon) are required',
+      })
+      return
+    }
+    try {
+      res.json(await getWeatherData(parseFloat(lat), parseFloat(lon), { timezone }))
+    } catch {
+      res.status(500).json({ error: 'Internal server error', message: 'Failed to fetch weather data' })
+    }
+  })
+
+  app.get('/api/v1/weather/search', async (req: Request, res: Response) => {
+    const query = typeof req.query.query === 'string' ? req.query.query : undefined
+    if (!query) {
+      res.status(400).json({ error: 'Missing query parameter', message: 'Search query is required' })
+      return
+    }
+    try {
+      res.json(await getLocationInfo(query))
+    } catch {
+      res.status(500).json({ error: 'Internal server error', message: 'Failed to search locations' })
+    }
+  })
+
+  // Gas and oil API routes (data, sources, available, search)
+  registerGasOilRoutes(app)
 
   if (!isProduction) {
     const { createServer } = await import('vite')
